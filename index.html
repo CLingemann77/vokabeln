@@ -158,8 +158,6 @@
   .cloud-status.off{background:var(--sun-light);border-color:#f0dcae;color:#8a6314;}
   .cloud-status b{color:inherit;}
   .sync-status{font-size:0.8rem;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:4px;line-height:1.4;}
-  label.check-row{display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--navy);font-weight:600;margin-top:10px;}
-  label.check-row input{width:auto;margin:0;}
   .msg{font-size:0.82rem;padding:9px 12px;border-radius:10px;margin-top:10px;display:none;}
   .msg.ok{background:var(--mint-light);color:var(--mint);display:block;}
   .msg.err{background:var(--coral-light);color:#c14636;display:block;}
@@ -344,33 +342,15 @@
     </div>
 
     <div class="manage-block">
-      <h3>Geräteabgleich von Hand</h3>
-
-      <label class="field-label">Units an ein anderes Gerät schicken</label>
+      <h3>Sicherungsdatei</h3>
       <div class="hint-box">
-        Überträgt nur die Vokabeln. Lernfortschritt, Sterne und Streak auf dem Zielgerät bleiben unangetastet. Bereits vorhandene Vokabeln werden übersprungen.
+        Für den Fall, dass das Firebase-Projekt oder das Passwort verloren geht. Die Datei enthält alles: Units, Lernfortschritt, Sterne, Streak, PIN.
       </div>
-      <div id="unit-export-list"></div>
-      <button class="primary-btn sky" id="unit-export-btn">📤 Units kopieren</button>
-
-      <label class="field-label" style="margin-top:22px;">Kompletten Stand sichern</label>
-      <div class="hint-box">
-        Sichert alles: Units, Lernfortschritt, Sterne, Streak, PIN. Zum Umzug auf ein neues Gerät oder als Backup. Beim Übernehmen wird der Stand des Zielgeräts vollständig ersetzt.
-      </div>
-      <div class="sync-status" id="sync-status">Noch nicht gesichert.</div>
-      <button class="primary-btn" id="sync-export-btn">☁️ Stand sichern</button>
-
-      <label class="field-label" style="margin-top:22px;">Übernehmen</label>
-      <button class="secondary-btn" id="sync-import-btn" style="margin-top:0;">📥 Übernehmen</button>
-      <div class="msg" id="sync-msg"></div>
-      <textarea id="sync-text" placeholder="Beim Kopieren erscheint hier der Text. Zum Übernehmen den kopierten Text hier einfügen." style="min-height:110px;margin-top:12px;"></textarea>
-      <div class="hint-box" style="margin-top:10px;">
-        Das Feld ist der Rückfallweg, falls die Zwischenablage blockiert ist &ndash; bei einer lokal geöffneten Datei kommt das vor. Text von Hand kopieren bzw. einfügen, dann funktionieren beide Richtungen trotzdem. Erkannt wird automatisch, ob es Units oder eine Vollsicherung sind.
-      </div>
-
-      <label class="field-label" style="margin-top:22px;">Name des Kurzbefehls</label>
-      <input type="text" id="sync-shortcut-name" placeholder="Vokabeltrainer sichern">
-      <label class="check-row"><input type="checkbox" id="sync-auto-shortcut" checked> Kurzbefehl nach dem Kopieren automatisch starten</label>
+      <div class="sync-status" id="backup-status">Noch keine Sicherung auf diesem Gerät.</div>
+      <button class="primary-btn sky" id="backup-save-btn">Sicherungsdatei herunterladen</button>
+      <button class="secondary-btn" id="backup-load-btn">Sicherungsdatei einlesen</button>
+      <input type="file" id="backup-file-input" accept=".json,application/json" style="display:none;">
+      <div class="msg" id="backup-msg"></div>
     </div>
 
     <div class="manage-block">
@@ -1833,125 +1813,32 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     }
   });
 
-  // ============ Geraeteabgleich von Hand: Units senden / Vollsicherung / Uebernehmen ============
-  const SYNC_FORMAT = 'vokabeltrainer-sync';
-  const UNITS_FORMAT = 'vokabeltrainer-units';
-  const SYNC_VERSION = 1;
-  const DEFAULT_SHORTCUT_NAME = 'Vokabeltrainer sichern';
+  // ============ Sicherungsdatei ============
+  const BACKUP_FORMAT = 'vokabeltrainer-sync';
+  const BACKUP_VERSION = 1;
 
-  function syncMsg(text, kind){
-    const el = document.getElementById('sync-msg');
+  function backupMsg(text, kind){
+    const el = document.getElementById('backup-msg');
     el.textContent = text;
     el.className = 'msg ' + (kind || 'ok');
   }
 
   function renderSyncInfo(){
-    if(!settings) return;
-    const nameInput = document.getElementById('sync-shortcut-name');
-    const autoBox = document.getElementById('sync-auto-shortcut');
-    nameInput.value = settings.syncShortcutName || DEFAULT_SHORTCUT_NAME;
-    autoBox.checked = settings.syncAutoShortcut !== false;
-    const st = document.getElementById('sync-status');
+    const st = document.getElementById('backup-status');
+    if(!st) return;
     if(syncMeta.lastBackupAt){
-      const d = new Date(syncMeta.lastBackupAt);
-      st.textContent = 'Zuletzt auf diesem Gerät gesichert: ' + d.toLocaleString('de-DE');
+      st.textContent = 'Letzte Sicherungsdatei von diesem Gerät: ' + new Date(syncMeta.lastBackupAt).toLocaleString('de-DE');
     } else {
-      st.textContent = 'Auf diesem Gerät noch nicht gesichert.';
+      st.textContent = 'Noch keine Sicherung auf diesem Gerät.';
     }
-    renderUnitExportList();
   }
 
-  function renderUnitExportList(){
-    const box = document.getElementById('unit-export-list');
-    const names = Object.keys(decks || {});
-    if(names.length === 0){
-      box.innerHTML = '<div style="font-size:0.82rem;color:var(--ink-soft);">Noch keine Units vorhanden.</div>';
-      return;
-    }
-    box.innerHTML = names.map(n =>
-      '<label class="check-row"><input type="checkbox" class="unit-export-cb" value="' + escapeHtml(n) + '"> ' +
-      escapeHtml(n) + ' <span style="color:var(--ink-soft);font-weight:600;">(' + decks[n].length + ')</span></label>'
-    ).join('');
-  }
-
-  function selectedExportUnits(){
-    return Array.from(document.querySelectorAll('.unit-export-cb'))
-      .filter(cb => cb.checked)
-      .map(cb => cb.value);
-  }
-
-  function cardKey(card){
-    return (String(card.en || '').trim().toLowerCase()) + '|' + (String(card.de || '').trim().toLowerCase());
-  }
-
-  async function copyToClipboard(text){
-    try{
-      if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-    }catch(e){}
-    try{
-      const ta = document.getElementById('sync-text');
-      ta.focus();
-      ta.select();
-      ta.setSelectionRange(0, ta.value.length);
-      return !!document.execCommand('copy');
-    }catch(e){ return false; }
-  }
-
-  async function readFromClipboard(){
-    try{
-      if(navigator.clipboard && navigator.clipboard.readText && window.isSecureContext){
-        const t = await navigator.clipboard.readText();
-        if(t && t.trim()) return t;
-      }
-    }catch(e){}
-    return null;
-  }
-
-  function runSaveShortcut(){
-    if(!settings || settings.syncAutoShortcut === false) return;
-    const name = (settings.syncShortcutName || DEFAULT_SHORTCUT_NAME);
-    setTimeout(()=>{ window.location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name); }, 250);
-  }
-
-  // ---- Units senden (nur Vokabeln, ohne Lernfortschritt) ----
-  document.getElementById('unit-export-btn').addEventListener('click', async ()=>{
-    const names = selectedExportUnits();
-    if(names.length === 0){ syncMsg('Keine Unit ausgewählt.', 'err'); return; }
-
-    const units = {};
-    let total = 0;
-    for(const n of names){
-      units[n] = (decks[n] || []).map(c => ({ en: c.en, de: c.de }));
-      total += units[n].length;
-    }
-    const payload = JSON.stringify({
-      format: UNITS_FORMAT,
-      version: SYNC_VERSION,
-      exportedAt: new Date().toISOString(),
-      unitCount: names.length,
-      cardCount: total,
-      units: units
-    });
-
-    document.getElementById('sync-text').value = payload;
-    const copied = await copyToClipboard(payload);
-    if(!copied){
-      syncMsg('Zwischenablage blockiert. Den Text unten von Hand kopieren, dann den Kurzbefehl starten.', 'err');
-      return;
-    }
-    syncMsg(names.length + (names.length === 1 ? ' Unit' : ' Units') + ' kopiert (' + total + ' Vokabeln).', 'ok');
-    runSaveShortcut();
-  });
-
-  // ---- Vollsicherung ----
   function buildSnapshot(){
-    return JSON.stringify({
-      format: SYNC_FORMAT,
-      version: SYNC_VERSION,
+    return {
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
+      device: deviceLabel(),
       cardCount: allCards().length,
       starBalance: stars.balance,
       data: {
@@ -1963,97 +1850,67 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
         daily: dailyData,
         pin: pinData
       }
-    });
+    };
   }
 
-  document.getElementById('sync-export-btn').addEventListener('click', async ()=>{
-    const snapshot = buildSnapshot();
-    document.getElementById('sync-text').value = snapshot;
-    const copied = await copyToClipboard(snapshot);
+  document.getElementById('backup-save-btn').addEventListener('click', async ()=>{
+    try{
+      const snap = buildSnapshot();
+      const blob = new Blob([JSON.stringify(snap, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const d = new Date();
+      const name = 'vokabeltrainer-sicherung-' + d.getFullYear() +
+        String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '.json';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(()=> URL.revokeObjectURL(url), 2000);
 
-    syncMeta.lastBackupAt = new Date().toISOString();
-    await saveSyncMeta();
-    renderSyncInfo();
-
-    if(!copied){
-      syncMsg('Zwischenablage blockiert. Den Text unten von Hand kopieren, dann den Kurzbefehl starten.', 'err');
-      return;
+      syncMeta.lastBackupAt = new Date().toISOString();
+      await saveSyncMeta();
+      renderSyncInfo();
+      backupMsg('Datei erzeugt: ' + name + ' (' + snap.cardCount + ' Vokabeln, ' + snap.starBalance + ' Sterne).', 'ok');
+    }catch(e){
+      backupMsg('Sicherung fehlgeschlagen: ' + e.message, 'err');
     }
-    syncMsg('Stand kopiert (' + allCards().length + ' Vokabeln, ' + stars.balance + ' Sterne).', 'ok');
-    runSaveShortcut();
   });
 
-  // ---- Uebernehmen (erkennt Units oder Vollsicherung) ----
-  async function importUnits(snap){
-    const units = snap.units || {};
-    const names = Object.keys(units);
-    if(names.length === 0){ syncMsg('Der Text enthält keine Units.', 'err'); return; }
+  document.getElementById('backup-load-btn').addEventListener('click', ()=>{
+    document.getElementById('backup-file-input').click();
+  });
 
-    const plan = [];
-    for(const n of names){
-      const existing = decks[n] || [];
-      const known = new Set(existing.map(cardKey));
-      const fresh = [];
-      let dupes = 0;
-      for(const c of units[n]){
-        if(!c || !c.en || !c.de) continue;
-        const key = (String(c.en).trim().toLowerCase()) + '|' + (String(c.de).trim().toLowerCase());
-        if(known.has(key)){ dupes++; continue; }
-        known.add(key);
-        fresh.push({
-          id: 'c' + Date.now() + Math.random().toString(36).slice(2,6),
-          en: String(c.en).trim(),
-          de: String(c.de).trim(),
-          box: 0,
-          due: todayStr()
-        });
-      }
-      plan.push({ name: n, isNew: !decks[n], fresh: fresh, dupes: dupes });
-    }
+  document.getElementById('backup-file-input').addEventListener('change', async (ev)=>{
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if(!file) return;
 
-    const lines = plan.map(p =>
-      '• ' + p.name + (p.isNew ? ' (neue Unit)' : '') + ': ' + p.fresh.length + ' neu' +
-      (p.dupes ? ', ' + p.dupes + ' schon vorhanden' : '')
-    ).join('\n');
-    const totalNew = plan.reduce((s,p)=> s + p.fresh.length, 0);
-
-    if(totalNew === 0){
-      syncMsg('Alle Vokabeln sind auf diesem Gerät schon vorhanden. Nichts geändert.', 'ok');
+    let snap;
+    try{
+      snap = JSON.parse(await file.text());
+    }catch(e){
+      backupMsg('Die Datei ist keine gültige Sicherung.', 'err');
       return;
     }
-    if(!confirm('Diese Vokabeln hinzufügen?\n\n' + lines + '\n\nLernfortschritt und Sterne bleiben unverändert.')) return;
-
-    for(const p of plan){
-      if(p.fresh.length === 0) continue;
-      decks[p.name] = decks[p.name] ? decks[p.name].concat(p.fresh) : p.fresh;
-    }
-    await saveDecks();
-    renderOverview();
-    renderManage();
-    renderPracticeDeckList();
-    renderUnitExportList();
-    document.getElementById('sync-text').value = '';
-    syncMsg(totalNew + ' Vokabeln hinzugefügt.', 'ok');
-  }
-
-  async function importFullSnapshot(snap){
-    if(!snap.data || typeof snap.data.decks !== 'object'){
-      syncMsg('Die Vollsicherung ist unvollständig.', 'err');
+    if(!snap || snap.format !== BACKUP_FORMAT || !snap.data || typeof snap.data.decks !== 'object'){
+      backupMsg('Die Datei stammt nicht aus dem Vokabeltrainer.', 'err');
       return;
     }
-    // PIN nur abfragen, wenn auf diesem Geraet schon einer eingerichtet ist –
-    // beim ersten Uebernehmen auf einem neuen Geraet kommt der PIN ohnehin mit.
+
     if(pinData.pin){
       const ok = await requirePin();
       if(!ok) return;
     }
+
     const when = snap.exportedAt ? new Date(snap.exportedAt).toLocaleString('de-DE') : 'unbekannt';
     const confirmed = confirm(
-      'Kompletten Stand übernehmen?\n\n' +
-      'Gesichert am: ' + when + '\n' +
+      'Sicherung einlesen?\n\n' +
+      'Erstellt am: ' + when + (snap.device ? ' auf ' + snap.device : '') + '\n' +
       'Vokabeln: ' + (snap.cardCount != null ? snap.cardCount : '?') + '\n' +
       'Sterne: ' + (snap.starBalance != null ? snap.starBalance : '?') + '\n\n' +
-      'Der aktuelle Stand auf diesem Gerät wird dabei vollständig ersetzt – auch Lernfortschritt und Sterne.'
+      'Der aktuelle Stand wird vollständig ersetzt – auf diesem Gerät und über den Abgleich auch auf den anderen.'
     );
     if(!confirmed) return;
 
@@ -2081,40 +1938,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     renderStarLog();
     renderDailyChallengeCard();
     renderSyncInfo();
-    document.getElementById('sync-text').value = '';
-    syncMsg('Stand vom ' + when + ' übernommen.', 'ok');
-  }
-
-  document.getElementById('sync-import-btn').addEventListener('click', async ()=>{
-    let raw = await readFromClipboard();
-    if(!raw) raw = document.getElementById('sync-text').value.trim();
-    if(!raw){
-      syncMsg('Kein Text gefunden. Den kopierten Text in das Feld unten einfügen.', 'err');
-      return;
-    }
-
-    let snap;
-    try{ snap = JSON.parse(raw); }
-    catch(e){ syncMsg('Der Text ist kein gültiger Vokabeltrainer-Text.', 'err'); return; }
-
-    if(!snap || (snap.format !== SYNC_FORMAT && snap.format !== UNITS_FORMAT)){
-      syncMsg('Der Text stammt nicht aus dem Vokabeltrainer.', 'err');
-      return;
-    }
-
-    if(snap.format === UNITS_FORMAT) await importUnits(snap);
-    else await importFullSnapshot(snap);
-  });
-
-  document.getElementById('sync-shortcut-name').addEventListener('change', async (e)=>{
-    settings.syncShortcutName = e.target.value.trim() || DEFAULT_SHORTCUT_NAME;
-    e.target.value = settings.syncShortcutName;
-    await saveSettings();
-  });
-
-  document.getElementById('sync-auto-shortcut').addEventListener('change', async (e)=>{
-    settings.syncAutoShortcut = e.target.checked;
-    await saveSettings();
+    backupMsg('Sicherung vom ' + when + ' eingelesen.', 'ok');
   });
 
   document.querySelector('nav.tabs button[data-tab="manage"]').addEventListener('click', renderSyncInfo);
