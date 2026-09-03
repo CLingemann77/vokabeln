@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vokabeltrainer</title>
+<style>
+  :root{
+    --navy:#1c3550;
+    --navy-2:#274a6d;
+    --sky:#4f8fea;
+    --sky-light:#e8f1fd;
+    --mint:#2fbf83;
+    --mint-light:#e3f9ee;
+    --coral:#ff6b5f;
+    --coral-light:#ffece9;
+    --sun:#ffb238;
+    --sun-light:#fff3dd;
+    --paper:#fbf9f4;
+    --card:#ffffff;
+    --ink:#233245;
+    --ink-soft:#657185;
+    --line:#e6e2d8;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:20px 14px 40px;
+  }
+  .app{width:100%;max-width:560px;}
+
+  header{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
+  .mascot{font-size:2.1rem;line-height:1;filter:drop-shadow(0 2px 3px rgba(28,53,80,.15));}
+  header h1{font-size:1.5rem;margin:0;color:var(--navy);letter-spacing:-0.01em;}
+  .header-sub{font-size:0.8rem;color:var(--ink-soft);margin-top:1px;}
+
+  nav.tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;}
+  nav.tabs button{flex:1;border:none;background:transparent;padding:9px 4px;border-radius:999px;font-size:0.76rem;font-weight:700;color:var(--ink-soft);cursor:pointer;transition:background .15s, color .15s;}
+  nav.tabs button.active{background:var(--navy);color:#fff;}
+
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+  .stat-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;}
+  .stat-card .num{font-size:1.8rem;font-weight:800;color:var(--navy);line-height:1;}
+  .stat-card .label{font-size:0.78rem;color:var(--ink-soft);margin-top:4px;}
+
+  .deck-list{display:flex;flex-direction:column;gap:8px;}
+  .deck-row{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
+  .deck-row .name{font-weight:700;font-size:0.92rem;}
+  .deck-row .meta{font-size:0.76rem;color:var(--ink-soft);margin-top:2px;}
+  .pill{background:var(--mint-light);color:var(--mint);font-size:0.74rem;font-weight:800;padding:4px 10px;border-radius:999px;white-space:nowrap;}
+  .pill.zero{background:#eef0ee;color:#9aa5ad;}
+  .chevron{color:#c3c9cd;font-size:1.1rem;margin-left:8px;}
+
+  .primary-btn{display:block;width:100%;text-align:center;background:var(--navy);color:#fff;border:none;border-radius:var(--radius);padding:14px;font-size:1rem;font-weight:800;cursor:pointer;margin-top:16px;}
+  .primary-btn.sky{background:var(--sky);}
+  .primary-btn.coral{background:var(--coral);}
+  .primary-btn:disabled{background:#ccd1d6;cursor:default;}
+  .primary-btn:active:not(:disabled){transform:scale(0.98);}
+
+  .learn-empty{background:var(--card);border:1px dashed var(--line);border-radius:var(--radius);padding:36px 20px;text-align:center;color:var(--ink-soft);}
+  .progress-bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-bottom:18px;}
+  .progress-bar > div{height:100%;background:linear-gradient(90deg,var(--sky),var(--mint));transition:width .2s;}
+
+  .flash{background:var(--card);border:1px solid var(--line);border-radius:22px;min-height:230px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px 20px;cursor:pointer;position:relative;box-shadow:0 6px 20px rgba(28,53,80,.06);}
+  .flash .tag{position:absolute;top:14px;left:16px;font-size:0.72rem;font-weight:800;color:var(--sky);background:var(--sky-light);padding:4px 10px;border-radius:999px;}
+  .flash .dirtag{position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:0.68rem;font-weight:800;color:var(--ink-soft);background:#f1efe8;padding:4px 10px;border-radius:999px;}
+  .flash .front{font-size:1.75rem;font-weight:800;color:var(--navy);}
+  .flash .back{font-size:1.15rem;color:var(--ink);margin-top:14px;border-top:1px dashed var(--line);padding-top:14px;width:100%;}
+  .flash .hint{margin-top:16px;font-size:0.78rem;color:#b7bfc7;}
+  .speak-btn{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;border:none;background:var(--sun-light);font-size:1.15rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .speak-btn:active{transform:scale(0.92);}
+
+  .rate-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:16px;}
+  .rate-btn{border:none;border-radius:14px;padding:13px 6px;font-weight:800;font-size:0.86rem;cursor:pointer;color:#fff;}
+  .rate-again{background:var(--coral);}
+  .rate-good{background:var(--sky);}
+  .rate-easy{background:var(--mint);}
+  .rate-btn .sub{display:block;font-weight:600;font-size:0.7rem;opacity:0.9;margin-top:2px;}
+
+  .nav-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;}
+  .nav-btn{background:var(--card);border:2px solid var(--line);color:var(--navy);border-radius:14px;padding:12px;font-weight:800;font-size:0.9rem;cursor:pointer;}
+  .nav-btn:disabled{opacity:0.4;}
+
+  .done-banner{text-align:center;padding:40px 20px;background:var(--card);border-radius:var(--radius);border:1px solid var(--line);}
+  .done-banner .emoji{font-size:2.6rem;}
+  .done-banner h3{color:var(--navy);margin:10px 0 4px;}
+
+  .seg{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:3px;margin-bottom:14px;}
+  .seg button{flex:1;border:none;background:transparent;padding:8px 4px;border-radius:9px;font-size:0.76rem;font-weight:700;color:var(--ink-soft);cursor:pointer;}
+  .seg button.active{background:var(--navy);color:#fff;}
+
+  .mode-list{display:flex;flex-direction:column;gap:9px;}
+  .mode-row{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;}
+  .mode-row:active{transform:scale(0.985);}
+  .mode-row .icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;}
+  .mode-row .icon.karteikarten{background:var(--sky-light);}
+  .mode-row .icon.lernen{background:var(--mint-light);}
+  .mode-row .icon.testen{background:var(--sun-light);}
+  .mode-row .icon.zuordnen{background:var(--coral-light);}
+  .mode-row .title{font-weight:800;font-size:0.92rem;color:var(--navy);}
+  .mode-row .desc{font-size:0.76rem;color:var(--ink-soft);margin-top:1px;}
+
+  .deck-header{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;}
+  .deck-header .dh-name{font-weight:800;font-size:1.05rem;color:var(--navy);}
+  .deck-header .dh-meta{font-size:0.78rem;color:var(--ink-soft);margin-top:2px;}
+
+  .game-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+  .game-stat{font-size:0.85rem;font-weight:800;color:var(--navy);background:var(--sky-light);padding:6px 12px;border-radius:999px;}
+  .back-link{background:none;border:none;color:var(--ink-soft);font-size:0.82rem;font-weight:700;cursor:pointer;padding:6px 0;}
+
+  .match-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .match-tile{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:12px 8px;text-align:center;font-size:0.85rem;font-weight:700;cursor:pointer;min-height:56px;display:flex;align-items:center;justify-content:center;color:var(--ink);transition:transform .1s, border-color .15s, background .15s;}
+  .match-tile.selected{border-color:var(--sky);background:var(--sky-light);}
+  .match-tile.correct{border-color:var(--mint);background:var(--mint-light);color:var(--mint);cursor:default;}
+  .match-tile.wrong{border-color:var(--coral);background:var(--coral-light);animation:shake .3s;}
+  @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
+
+  .quiz-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:28px 20px;text-align:center;margin-bottom:14px;box-shadow:0 6px 20px rgba(28,53,80,.06);position:relative;}
+  .quiz-card .front{font-size:1.6rem;font-weight:800;color:var(--navy);}
+  .quiz-options{display:flex;flex-direction:column;gap:8px;}
+  .quiz-opt{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:13px 14px;font-size:0.92rem;font-weight:700;text-align:left;cursor:pointer;color:var(--ink);}
+  .quiz-opt.correct{border-color:var(--mint);background:var(--mint-light);color:#1c8a5a;}
+  .quiz-opt.wrong{border-color:var(--coral);background:var(--coral-light);color:#c14636;}
+  .quiz-opt.reveal-correct{border-color:var(--mint);background:var(--mint-light);color:#1c8a5a;}
+  .quiz-opt:disabled{cursor:default;}
+
+  .game-done{text-align:center;padding:40px 20px;background:var(--card);border-radius:var(--radius);border:1px solid var(--line);}
+  .game-done .emoji{font-size:2.8rem;}
+  .game-done .score{font-size:2.2rem;font-weight:800;color:var(--navy);margin:8px 0 2px;}
+  .game-done .score-label{font-size:0.8rem;color:var(--ink-soft);}
+  .best-badge{display:inline-block;margin-top:10px;font-size:0.76rem;font-weight:800;background:var(--sun-light);color:#a5720d;padding:5px 12px;border-radius:999px;}
+
+  .review-list{display:flex;flex-direction:column;gap:8px;margin-top:14px;text-align:left;}
+  .review-item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:0.82rem;}
+  .review-item.wrong{border-color:var(--coral-light);background:var(--coral-light);}
+  .review-item.correct{border-color:var(--mint-light);}
+  .review-item .q{font-weight:800;color:var(--navy);}
+  .review-item .a{color:var(--ink-soft);margin-top:2px;}
+
+  textarea{width:100%;min-height:140px;border:1px solid var(--line);border-radius:12px;padding:12px;font-family: ui-monospace, monospace;font-size:0.82rem;resize:vertical;background:var(--card);}
+  input[type=text]{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 12px;font-size:0.92rem;margin-bottom:10px;background:var(--card);}
+  label.field-label{font-size:0.8rem;font-weight:800;color:var(--navy);display:block;margin-bottom:6px;}
+  .hint-box{background:var(--sun-light);border:1px solid #f0dcae;color:#8a6314;font-size:0.78rem;padding:10px 12px;border-radius:10px;margin-bottom:14px;line-height:1.45;}
+  .manage-block{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
+  .manage-block h3{margin:0 0 10px;font-size:0.95rem;color:var(--navy);}
+  .sync-status{font-size:0.8rem;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:4px;line-height:1.4;}
+  label.check-row{display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--navy);font-weight:600;margin-top:10px;}
+  label.check-row input{width:auto;margin:0;}
+  .msg{font-size:0.82rem;padding:9px 12px;border-radius:10px;margin-top:10px;display:none;}
+  .msg.ok{background:var(--mint-light);color:var(--mint);display:block;}
+  .msg.err{background:var(--coral-light);color:#c14636;display:block;}
+  .deck-manage-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:0.85rem;}
+  .deck-manage-row:last-child{border-bottom:none;}
+  .del-btn{border:none;background:none;color:var(--coral);font-size:0.78rem;font-weight:800;cursor:pointer;}
+  .loading{text-align:center;color:var(--ink-soft);padding:30px;font-size:0.85rem;}
+  select.plain{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:0.9rem;background:var(--paper);}
+
+  .mode-row .icon.blitzrunde{background:var(--sun-light);}
+  .mode-row .icon.challenge{background:var(--mint-light);}
+  .stars-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  .star-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;}
+  .star-card .num{font-size:1.8rem;font-weight:800;color:#c98a2b;line-height:1;}
+  .star-card .label{font-size:0.78rem;color:var(--ink-soft);margin-top:4px;}
+  .challenge-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer;}
+  .challenge-card.locked{opacity:0.55;cursor:default;}
+  .challenge-card .title{font-weight:800;font-size:0.9rem;color:var(--navy);}
+  .challenge-card .desc{font-size:0.76rem;color:var(--ink-soft);margin-top:2px;}
+  .log-list{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;}
+  .log-item{display:flex;justify-content:space-between;font-size:0.8rem;padding:7px 0;border-bottom:1px solid var(--line);}
+  .log-item:last-child{border-bottom:none;}
+  .log-item .delta.pos{color:var(--mint);font-weight:800;}
+  .log-item .delta.neg{color:var(--coral);font-weight:800;}
+  .redeem-row{display:flex;gap:8px;margin-top:10px;}
+  .redeem-row input{flex:1;margin-bottom:0;}
+  .redeem-row button{white-space:nowrap;}
+  .timer-big{font-size:1.4rem;font-weight:800;color:var(--coral);}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="mascot">🦝</div>
+    <div>
+      <h1>Vokabeltrainer</h1>
+      <div class="header-sub">für Amy · mit Vorlesefunktion</div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="overview" class="active">Start</button>
+    <button data-tab="review">Wiederholen</button>
+    <button data-tab="practice">Üben</button>
+    <button data-tab="manage">Verwalten</button>
+  </nav>
+
+  <div id="loading" class="loading">Lädt …</div>
+
+  <!-- START -->
+  <section class="panel active" id="panel-overview">
+    <div class="stat-row">
+      <div class="stat-card"><div class="num" id="stat-due">0</div><div class="label">heute fällig</div></div>
+      <div class="stat-card"><div class="num" id="stat-total">0</div><div class="label">Vokabeln gesamt</div></div>
+    </div>
+    <div class="stars-row">
+      <div class="star-card"><div class="num" id="stat-stars">0 ⭐</div><div class="label">Sterne-Konto</div></div>
+      <div class="star-card"><div class="num" id="stat-streak">0 🔥</div><div class="label">Tage in Folge</div></div>
+    </div>
+    <div class="challenge-card" id="daily-challenge-card">
+      <div>
+        <div class="title">🎯 Tages-Herausforderung</div>
+        <div class="desc" id="daily-challenge-desc">5 Fragen, einmal am Tag</div>
+      </div>
+      <span class="chevron">›</span>
+    </div>
+    <div class="deck-list" id="deck-list"></div>
+    <button class="primary-btn" id="start-learn-btn">Fällige wiederholen</button>
+    <button class="secondary-btn" id="redeem-btn">⭐ Sterne einlösen</button>
+  </section>
+
+  <!-- WIEDERHOLEN (Spaced Repetition, alle fälligen Karten gemischt) -->
+  <section class="panel" id="panel-review">
+    <div class="progress-bar"><div id="progress-fill" style="width:0%"></div></div>
+    <div id="learn-area"></div>
+  </section>
+
+  <!-- ÜBEN (Deck- und Modus-Auswahl) -->
+  <section class="panel" id="panel-practice">
+    <div id="practice-deckselect">
+      <div class="deck-list" id="practice-deck-list"></div>
+    </div>
+
+    <div id="practice-modeselect" style="display:none;">
+      <button class="back-link" id="practice-back-to-decks">← Andere Unit</button>
+      <div class="deck-header">
+        <div class="dh-name" id="practice-deck-name"></div>
+        <div class="dh-meta" id="practice-deck-meta"></div>
+      </div>
+      <div class="seg" id="direction-seg">
+        <button data-dir="en-de" class="active">Englisch → Deutsch</button>
+        <button data-dir="de-en">Deutsch → Englisch</button>
+        <button data-dir="mixed">Gemischt</button>
+      </div>
+      <div class="mode-list">
+        <div class="mode-row" id="mode-karteikarten">
+          <div class="icon karteikarten">🗂️</div>
+          <div><div class="title">Karteikarten</div><div class="desc">Frei durchblättern, umdrehen</div></div>
+        </div>
+        <div class="mode-row" id="mode-lernen">
+          <div class="icon lernen">🎯</div>
+          <div><div class="title">Lernen</div><div class="desc">Multiple Choice, mit Feedback, übt Fehler erneut</div></div>
+        </div>
+        <div class="mode-row" id="mode-testen">
+          <div class="icon testen">📝</div>
+          <div><div class="title">Testen</div><div class="desc">Wie ein echter Test, Ergebnis am Ende</div></div>
+        </div>
+        <div class="mode-row" id="mode-zuordnen">
+          <div class="icon zuordnen">🧩</div>
+          <div><div class="title">Zuordnen</div><div class="desc">Paare finden, gegen die Zeit</div></div>
+        </div>
+        <div class="mode-row" id="mode-blitzrunde">
+          <div class="icon blitzrunde">⚡</div>
+          <div><div class="title">Blitzrunde</div><div class="desc">60 Sekunden, so viele richtig wie möglich</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="practice-play" style="display:none;"></div>
+  </section>
+
+  <!-- VERWALTEN -->
+  <section class="panel" id="panel-manage">
+    <div class="manage-block" id="voice-block">
+      <h3 style="display:flex;align-items:center;justify-content:space-between;">
+        Aussprache
+        <button class="speak-btn" id="voice-test-btn" title="Testen" style="position:static;">🔊</button>
+      </h3>
+      <label class="field-label">Stimme</label>
+      <select id="voice-select" class="plain"></select>
+      <div style="margin-top:12px;">
+        <label class="field-label">Tempo: <span id="rate-val">0.9</span></label>
+        <input type="range" id="rate-range" min="0.5" max="1.2" step="0.05" value="0.9" style="width:100%;">
+      </div>
+      <div class="hint-box" style="margin-top:12px;margin-bottom:0;">
+        Tipp: Unter Einstellungen → Bedienungshilfen → Gesprochene Inhalte → Stimmen eine "Enhanced"-Stimme herunterladen – klingt natürlicher. Die echte Siri-Stimme lässt Apple für Webseiten und Apps generell nicht zu.
+      </div>
+    </div>
+
+    <div class="manage-block">
+      <h3>Sterne-Verlauf</h3>
+      <div class="log-list" id="star-log-list"></div>
+      <div class="redeem-row">
+        <input type="text" id="manual-star-amount" placeholder="Anzahl, z. B. 5 oder -5">
+        <button class="secondary-btn" id="manual-star-btn" style="margin-top:0;">Anpassen</button>
+      </div>
+      <div class="hint-box" style="margin-top:10px;margin-bottom:0;">
+        Für manuelle Korrekturen, z. B. wenn eine Belohnung außerhalb der App eingelöst wurde oder ihr euch auf einen Bonus geeinigt habt. Positive Zahl = Sterne dazu, negative Zahl = Sterne abziehen. Beides ist PIN-geschützt.
+      </div>
+      <button class="secondary-btn" id="change-pin-btn">🔒 PIN ändern</button>
+    </div>
+
+    <div class="manage-block">
+      <h3>Richtung für "Wiederholen"</h3>
+      <div class="seg" id="global-direction-seg">
+        <button data-dir="en-de" class="active">Englisch → Deutsch</button>
+        <button data-dir="de-en">Deutsch → Englisch</button>
+        <button data-dir="mixed">Gemischt</button>
+      </div>
+    </div>
+
+    <div class="manage-block">
+      <h3>Geräteabgleich</h3>
+
+      <label class="field-label">Units an ein anderes Gerät schicken</label>
+      <div class="hint-box">
+        Überträgt nur die Vokabeln. Lernfortschritt, Sterne und Streak auf dem Zielgerät bleiben unangetastet. Bereits vorhandene Vokabeln werden übersprungen.
+      </div>
+      <div id="unit-export-list"></div>
+      <button class="primary-btn sky" id="unit-export-btn">📤 Units kopieren</button>
+
+      <label class="field-label" style="margin-top:22px;">Kompletten Stand sichern</label>
+      <div class="hint-box">
+        Sichert alles: Units, Lernfortschritt, Sterne, Streak, PIN. Zum Umzug auf ein neues Gerät oder als Backup. Beim Übernehmen wird der Stand des Zielgeräts vollständig ersetzt.
+      </div>
+      <div class="sync-status" id="sync-status">Noch nicht gesichert.</div>
+      <button class="primary-btn" id="sync-export-btn">☁️ Stand sichern</button>
+
+      <label class="field-label" style="margin-top:22px;">Übernehmen</label>
+      <button class="secondary-btn" id="sync-import-btn" style="margin-top:0;">📥 Übernehmen</button>
+      <div class="msg" id="sync-msg"></div>
+      <textarea id="sync-text" placeholder="Beim Kopieren erscheint hier der Text. Zum Übernehmen den kopierten Text hier einfügen." style="min-height:110px;margin-top:12px;"></textarea>
+      <div class="hint-box" style="margin-top:10px;">
+        Das Feld ist der Rückfallweg, falls die Zwischenablage blockiert ist &ndash; bei einer lokal geöffneten Datei kommt das vor. Text von Hand kopieren bzw. einfügen, dann funktionieren beide Richtungen trotzdem. Erkannt wird automatisch, ob es Units oder eine Vollsicherung sind.
+      </div>
+
+      <label class="field-label" style="margin-top:22px;">Name des Kurzbefehls</label>
+      <input type="text" id="sync-shortcut-name" placeholder="Vokabeltrainer sichern">
+      <label class="check-row"><input type="checkbox" id="sync-auto-shortcut" checked> Kurzbefehl nach dem Kopieren automatisch starten</label>
+    </div>
+
+    <div class="manage-block">
+      <h3>Neue Unit hinzufügen</h3>
+      <div class="hint-box">Format pro Zeile: <b>Englisch;Deutsch</b><br>Beispiel: <code>raccoon;der Waschbär</code><br>Eine Lautschrift in eckigen Klammern am Zeilenende wird ignoriert.</div>
+      <label class="field-label">Name der Unit</label>
+      <input type="text" id="unit-name" placeholder="z. B. Unit 2">
+      <label class="field-label">Vokabeln</label>
+      <textarea id="import-text" placeholder="Englisch;Deutsch&#10;Englisch;Deutsch"></textarea>
+      <button class="primary-btn sky" id="import-btn">Unit importieren</button>
+      <div class="msg" id="import-msg"></div>
+    </div>
+
+    <div class="manage-block">
+      <h3>Vorhandene Units</h3>
+      <div id="deck-manage-list"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  const BOX_INTERVALS = [0, 1, 3, 7, 14, 30];
+  const STORAGE_KEY = 'vokabeltrainer-decks-v1';
+  const VOICE_PREF_KEY = 'vokabeltrainer-voice-pref-v1';
+  const BEST_SCORES_KEY = 'vokabeltrainer-best-scores-v1';
+  const SETTINGS_KEY = 'vokabeltrainer-settings-v1';
+  const STARS_KEY = 'vokabeltrainer-stars-v1';
+  const STREAK_KEY = 'vokabeltrainer-streak-v1';
+  const DAILY_KEY = 'vokabeltrainer-daily-v1';
+  const PIN_KEY = 'vokabeltrainer-pin-v1';
+
+  // Speicher-Adapter: nutzt window.storage (Claude-Artefakt), faellt sonst auf
+  // localStorage zurueck, damit die Datei auch als eigenstaendige Datei
+  // (z. B. lokal auf iPhone/iPad geoeffnet) zuverlaessig speichert.
+  const Store = (function(){
+    const hasArtifactStorage = (typeof window.storage !== 'undefined');
+    return {
+      async get(key, shared){
+        if(hasArtifactStorage){
+          try{ return await window.storage.get(key, !!shared); }
+          catch(e){ return null; }
+        }
+        try{
+          const v = localStorage.getItem(key);
+          return v !== null ? {key, value: v, shared: !!shared} : null;
+        }catch(e){ return null; }
+      },
+      async set(key, value, shared){
+        if(hasArtifactStorage){
+          try{ return await window.storage.set(key, value, !!shared); }
+          catch(e){ return null; }
+        }
+        try{ localStorage.setItem(key, value); return {key, value, shared: !!shared}; }
+        catch(e){ return null; }
+      }
+    };
+  })();
+
+  const DEFAULT_DECKS = {
+    "Unit 1": parseImport(
+`Hi.;Hi.; Hallo. [haɪ]
+I'm (= I am);ich bin [aɪm]
+the;der; die (auch Pl.); das [ðə]
+raccoon;der Waschbär [rəˈkuːn]
+my;mein / meine [maɪ]
+favourite;Lieblings- [ˈfeɪvrɪt]
+colour;die Farbe [ˈkʌlə]
+is;ist [ɪz]
+what's (= what is);was ist [wɒts]
+your;dein / deine; euer / eure; Ihr / Ihre [jɔː]
+My name is …;Ich heiße … [maɪ ˈneɪm ɪz]
+What's your name?;Wie heißt du? [wɒts jə ˈneɪm]
+Nice to meet you.;Schön, dich kennenzulernen. [ˌnaɪs tə ˈmiːt juː]
+How are you?;Wie geht es dir? [ˌhaʊ ˈɑː jə]
+great;gut; toll; großartig; groß; riesig [greɪt]
+See you later.;Tschüss.; Bis bald. [ˌsiː jə ˈleɪtə]
+Bye.;Tschüss. [baɪ]
+to say;sagen; sprechen [seɪ]
+Hello.;Hallo. [həˈləʊ]
+Goodbye.;Auf Wiedersehen. [gʊdˈbaɪ]
+What are your names?;Wie heißt ihr? [ˌwɒt ɑː jə ˈneɪmz]
+and;und [ænd]
+this;das; dies [ðɪs]
+too;auch; zu [tuː]
+pardon;Entschuldigung [ˈpɑːdn]
+Can you spell that?;Kannst du das buchstabieren? [kæn juː ˈspel ðæt]
+please;bitte [pliːz]
+Thank you.;Danke. [ˈθæŋk juː]
+How old are you?;Wie alt bist du? [ˌhaʊ ˈəʊld ə juː]
+Where are you from?;Woher kommst du? [ˌweər ə juː ˈfrɒm]
+I'm from …;Ich komme aus … [aɪm ˈfrɒm]
+student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]`)
+  };
+
+  function parseImport(text){
+    const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+    const cards = [];
+    let idCounter = Date.now();
+    for(const line of lines){
+      const semiIdx = line.indexOf(';');
+      if(semiIdx === -1) continue;
+      const en = line.slice(0, semiIdx).trim();
+      let rest = line.slice(semiIdx+1).trim();
+      // Eine evtl. angehaengte Lautschrift in eckigen Klammern wird verworfen,
+      // damit aeltere Importtexte weiter funktionieren.
+      const m = rest.match(/\[([^\]]*)\]\s*$/);
+      if(m){ rest = rest.slice(0, m.index).trim(); }
+      if(!en || !rest) continue;
+      cards.push({ id: 'c' + (idCounter++) + Math.random().toString(36).slice(2,6), en, de: rest, box: 0, due: todayStr() });
+    }
+    return cards;
+  }
+
+  function todayStr(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function addDays(dateStr, days){
+    const d = new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+days);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function shuffle(arr){
+    const a = arr.slice();
+    for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; }
+    return a;
+  }
+  // Richtung: liefert {q, a, qLabel, aLabel} für eine Karte + Richtung
+  function applyDirection(card, direction){
+    let dir = direction;
+    if(dir === 'mixed') dir = Math.random() < 0.5 ? 'en-de' : 'de-en';
+    if(dir === 'de-en'){
+      return {q: card.de, a: card.en, qLabel:'Deutsch', aLabel:'Englisch', dir};
+    }
+    return {q: card.en, a: card.de, qLabel:'Englisch', aLabel:'Deutsch', dir};
+  }
+
+  let decks = {};
+  let bestScores = {};
+  let settings = { globalDirection: 'en-de' };
+  let stars = { balance: 0, log: [] };
+  let streakData = { practiceDates: [], lastMilestone: 0 };
+  let dailyData = { lastCompletedDate: null, lastScore: null };
+  let pinData = { pin: null };
+  let queue = [], currentIdx = 0, sessionTotal = 0, flipped = false;
+
+  async function loadAll(){
+    try{
+      const res = await Store.get(STORAGE_KEY, false);
+      decks = (res && res.value) ? JSON.parse(res.value) : DEFAULT_DECKS;
+      if(!res || !res.value) await saveDecks();
+    }catch(e){ decks = DEFAULT_DECKS; try{ await saveDecks(); }catch(e2){} }
+
+    try{
+      const res2 = await Store.get(BEST_SCORES_KEY, false);
+      bestScores = (res2 && res2.value) ? JSON.parse(res2.value) : {};
+    }catch(e){ bestScores = {}; }
+
+    try{
+      const res3 = await Store.get(SETTINGS_KEY, false);
+      settings = (res3 && res3.value) ? JSON.parse(res3.value) : { globalDirection: 'en-de' };
+    }catch(e){ settings = { globalDirection: 'en-de' }; }
+
+    try{
+      const res4 = await Store.get(STARS_KEY, false);
+      stars = (res4 && res4.value) ? JSON.parse(res4.value) : { balance: 0, log: [] };
+    }catch(e){ stars = { balance: 0, log: [] }; }
+
+    try{
+      const res5 = await Store.get(STREAK_KEY, false);
+      streakData = (res5 && res5.value) ? JSON.parse(res5.value) : { practiceDates: [], lastMilestone: 0 };
+    }catch(e){ streakData = { practiceDates: [], lastMilestone: 0 }; }
+
+    try{
+      const res6 = await Store.get(DAILY_KEY, false);
+      dailyData = (res6 && res6.value) ? JSON.parse(res6.value) : { lastCompletedDate: null, lastScore: null };
+    }catch(e){ dailyData = { lastCompletedDate: null, lastScore: null }; }
+
+    try{
+      const res7 = await Store.get(PIN_KEY, false);
+      pinData = (res7 && res7.value) ? JSON.parse(res7.value) : { pin: null };
+    }catch(e){ pinData = { pin: null }; }
+
+    document.getElementById('loading').style.display = 'none';
+    setSegActive('global-direction-seg', settings.globalDirection);
+    renderOverview();
+    renderManage();
+    renderPracticeDeckList();
+    renderStarLog();
+    renderDailyChallengeCard();
+  }
+  async function saveDecks(){ try{ await Store.set(STORAGE_KEY, JSON.stringify(decks), false); }catch(e){ console.error(e); } }
+  async function saveBestScores(){ try{ await Store.set(BEST_SCORES_KEY, JSON.stringify(bestScores), false); }catch(e){} }
+  async function saveSettings(){ try{ await Store.set(SETTINGS_KEY, JSON.stringify(settings), false); }catch(e){} }
+  async function saveStars(){ try{ await Store.set(STARS_KEY, JSON.stringify(stars), false); }catch(e){} }
+  async function saveStreak(){ try{ await Store.set(STREAK_KEY, JSON.stringify(streakData), false); }catch(e){} }
+  async function saveDaily(){ try{ await Store.set(DAILY_KEY, JSON.stringify(dailyData), false); }catch(e){} }
+
+  // ---- Sterne ----
+  async function awardStars(amount, reason){
+    if(amount === 0) return;
+    stars.balance += amount;
+    stars.log.unshift({date: todayStr(), delta: amount, reason: reason});
+    stars.log = stars.log.slice(0, 30);
+    await saveStars();
+    renderStarStats();
+    renderStarLog();
+  }
+  function renderStarStats(){
+    const el = document.getElementById('stat-stars');
+    if(el) el.textContent = stars.balance + ' ⭐';
+  }
+  function renderStarLog(){
+    const el = document.getElementById('star-log-list');
+    if(!el) return;
+    if(stars.log.length === 0){
+      el.innerHTML = '<div style="font-size:0.82rem;color:var(--ink-soft);">Noch keine Einträge.</div>';
+      return;
+    }
+    el.innerHTML = stars.log.map(entry => `
+      <div class="log-item">
+        <span>${escapeHtml(entry.reason)} <span style="color:var(--ink-soft);">· ${entry.date}</span></span>
+        <span class="delta ${entry.delta >= 0 ? 'pos' : 'neg'}">${entry.delta >= 0 ? '+' : ''}${entry.delta}</span>
+      </div>
+    `).join('');
+  }
+
+  // ---- Streak ----
+  function computeStreak(){
+    const dates = new Set(streakData.practiceDates);
+    let streak = 0;
+    let d = new Date(todayStr()+'T00:00:00');
+    // heutiger Tag zählt nur, wenn schon geübt; sonst bei gestern weiterzählen
+    if(!dates.has(todayStr())){
+      d.setDate(d.getDate()-1);
+    }
+    while(true){
+      const ds = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      if(dates.has(ds)){ streak++; d.setDate(d.getDate()-1); }
+      else break;
+    }
+    return streak;
+  }
+  async function markPracticedToday(){
+    const t = todayStr();
+    if(!streakData.practiceDates.includes(t)){
+      streakData.practiceDates.push(t);
+      streakData.practiceDates = streakData.practiceDates.slice(-120);
+    }
+    const streak = computeStreak();
+    if(streak > 0 && streak % 7 === 0 && streakData.lastMilestone < streak){
+      streakData.lastMilestone = streak;
+      await saveStreak();
+      await awardStars(5, streak + '-Tage-Streak Bonus');
+    } else {
+      await saveStreak();
+    }
+    renderStreakStat();
+  }
+  function renderStreakStat(){
+    const el = document.getElementById('stat-streak');
+    if(el) el.textContent = computeStreak() + ' 🔥';
+  }
+
+  // ---- Tages-Herausforderung ----
+  function renderDailyChallengeCard(){
+    const card = document.getElementById('daily-challenge-card');
+    const desc = document.getElementById('daily-challenge-desc');
+    if(!card) return;
+    const doneToday = dailyData.lastCompletedDate === todayStr();
+    card.classList.toggle('locked', doneToday);
+    if(doneToday){
+      desc.textContent = 'Heute schon erledigt: ' + dailyData.lastScore + ' / 5 richtig · morgen wieder da';
+    } else {
+      desc.textContent = '5 Fragen, einmal am Tag · bringt Sterne';
+    }
+  }
+  document.getElementById('daily-challenge-card').addEventListener('click', ()=>{
+    if(dailyData.lastCompletedDate === todayStr()) return;
+    startDailyChallenge();
+  });
+
+  let dailyQueue = [], dailyIdx = 0, dailyCorrect = 0, dailyAnswers = [];
+  function startDailyChallenge(){
+    const pool = allCards();
+    if(pool.length < 4){ alert('Dafür werden mindestens 4 Vokabeln benötigt.'); return; }
+    dailyQueue = shuffle(pool).slice(0, Math.min(5, pool.length));
+    dailyIdx = 0; dailyCorrect = 0; dailyAnswers = [];
+    switchTab('practice');
+    document.getElementById('practice-deckselect').style.display = 'none';
+    document.getElementById('practice-modeselect').style.display = 'none';
+    document.getElementById('practice-play').style.display = 'block';
+    renderDailyQuestion();
+  }
+  function renderDailyQuestion(){
+    const play = document.getElementById('practice-play');
+    if(dailyIdx >= dailyQueue.length){ finishDailyChallenge(); return; }
+    const card = dailyQueue[dailyIdx];
+    const d = applyDirection(card, 'mixed');
+    const pool = allCards();
+    const distractors = shuffle(pool.filter(c => c.id !== card.id)).slice(0, 3).map(c => applyDirection(c, d.dir).a);
+    const options = shuffle([d.a, ...distractors]);
+    play.innerHTML = `
+      <button class="back-link" id="daily-back">← Abbrechen</button>
+      <div class="game-header">
+        <span class="game-stat">🎯 Frage ${dailyIdx+1} / ${dailyQueue.length}</span>
+        <span class="game-stat">${d.qLabel} → ${d.aLabel}</span>
+      </div>
+      <div class="quiz-card"><div class="front">${escapeHtml(d.q)}</div></div>
+      <div class="quiz-options" id="daily-options"></div>
+    `;
+    document.getElementById('daily-back').addEventListener('click', showPracticeHome);
+    const optDiv = document.getElementById('daily-options');
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'quiz-opt';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#daily-options .quiz-opt').forEach(b => b.disabled = true);
+        const isCorrect = opt === d.a;
+        if(isCorrect){ btn.classList.add('correct'); dailyCorrect++; }
+        else {
+          btn.classList.add('wrong');
+          document.querySelectorAll('#daily-options .quiz-opt').forEach(b => { if(b.textContent === d.a) b.classList.add('reveal-correct'); });
+        }
+        setTimeout(()=>{ dailyIdx++; renderDailyQuestion(); }, 800);
+      });
+      optDiv.appendChild(btn);
+    });
+  }
+  async function finishDailyChallenge(){
+    dailyData.lastCompletedDate = todayStr();
+    dailyData.lastScore = dailyCorrect;
+    await saveDaily();
+    renderDailyChallengeCard();
+    await markPracticedToday();
+    let bonus = 3 + (dailyCorrect === dailyQueue.length ? 2 : 0);
+    await awardStars(bonus, 'Tages-Herausforderung (' + dailyCorrect + '/' + dailyQueue.length + ')');
+    const play = document.getElementById('practice-play');
+    const emoji = dailyCorrect === dailyQueue.length ? '🦝🏆' : '🦝👍';
+    play.innerHTML = `
+      <div class="game-done">
+        <div class="emoji">${emoji}</div>
+        <div class="score">${dailyCorrect} / ${dailyQueue.length}</div>
+        <div class="score-label">richtig · +${bonus} ⭐ verdient</div>
+      </div>
+      <button class="primary-btn" id="daily-done-btn">Zur Übersicht</button>
+    `;
+    document.getElementById('daily-done-btn').addEventListener('click', ()=> switchTab('overview'));
+  }
+
+  // ---- PIN-Schutz ----
+  async function savePin(){ try{ await Store.set(PIN_KEY, JSON.stringify(pinData), false); }catch(e){} }
+
+  // Einfache, nicht kryptografisch sichere Verschleierung – reicht, um ein
+  // Kind vom Verstellen abzuhalten, schuetzt aber nicht vor jemandem, der
+  // technisch im Quelltext/Speicher nachsieht.
+  function obfuscate(pin){
+    let h = 0;
+    for(let i=0;i<pin.length;i++){ h = (h*31 + pin.charCodeAt(i)) >>> 0; }
+    return String(h);
+  }
+
+  async function requirePin(){
+    if(!pinData.pin){
+      const p1 = prompt('Noch kein PIN eingerichtet. Neuen 4-stelligen PIN festlegen:');
+      if(p1 === null) return false;
+      if(!/^\d{4}$/.test(p1)){ alert('Bitte genau 4 Ziffern eingeben.'); return false; }
+      const p2 = prompt('PIN zur Bestätigung nochmal eingeben:');
+      if(p2 !== p1){ alert('PINs stimmen nicht überein. Abgebrochen.'); return false; }
+      pinData.pin = obfuscate(p1);
+      await savePin();
+      return true;
+    }
+    const entered = prompt('PIN eingeben:');
+    if(entered === null) return false;
+    if(obfuscate(entered) !== pinData.pin){ alert('Falscher PIN.'); return false; }
+    return true;
+  }
+
+  document.getElementById('change-pin-btn').addEventListener('click', async ()=>{
+    if(pinData.pin){
+      const current = prompt('Aktuellen PIN eingeben:');
+      if(current === null) return;
+      if(obfuscate(current) !== pinData.pin){ alert('Falscher PIN.'); return; }
+    }
+    const p1 = prompt('Neuen 4-stelligen PIN eingeben:');
+    if(p1 === null) return;
+    if(!/^\d{4}$/.test(p1)){ alert('Bitte genau 4 Ziffern eingeben.'); return; }
+    const p2 = prompt('Neuen PIN zur Bestätigung nochmal eingeben:');
+    if(p2 !== p1){ alert('PINs stimmen nicht überein. Abgebrochen.'); return; }
+    pinData.pin = obfuscate(p1);
+    await savePin();
+    alert('PIN gespeichert.');
+  });
+
+  // ---- Sterne einlösen / manuell anpassen ----
+  document.getElementById('redeem-btn').addEventListener('click', async ()=>{
+    const ok = await requirePin();
+    if(!ok) return;
+    const amountStr = prompt('Wie viele Sterne einlösen? (Aktueller Kontostand: ' + stars.balance + ')');
+    if(amountStr === null) return;
+    const amount = parseInt(amountStr, 10);
+    if(isNaN(amount) || amount <= 0){ alert('Bitte eine positive Zahl eingeben.'); return; }
+    if(amount > stars.balance){ alert('So viele Sterne sind noch nicht gesammelt.'); return; }
+    await awardStars(-amount, 'Eingelöst');
+  });
+  document.getElementById('manual-star-btn').addEventListener('click', async ()=>{
+    const ok = await requirePin();
+    if(!ok) return;
+    const input = document.getElementById('manual-star-amount');
+    const amount = parseInt(input.value, 10);
+    if(isNaN(amount) || amount === 0){ alert('Bitte eine Zahl ungleich 0 eingeben, z. B. 5 oder -5.'); return; }
+    await awardStars(amount, 'Manuell angepasst');
+    input.value = '';
+  });
+
+  function allCards(){
+    const out = [];
+    for(const unit in decks) for(const c of decks[unit]) out.push(Object.assign({unit}, c));
+    return out;
+  }
+  function dueCards(){
+    const t = todayStr();
+    return allCards().filter(c => c.due <= t);
+  }
+
+  // ============ Start ============
+  function renderOverview(){
+    const due = dueCards();
+    const total = allCards();
+    document.getElementById('stat-due').textContent = due.length;
+    document.getElementById('stat-total').textContent = total.length;
+
+    const list = document.getElementById('deck-list');
+    list.innerHTML = '';
+    const unitNames = Object.keys(decks);
+    if(unitNames.length === 0){
+      list.innerHTML = '<div class="learn-empty">Noch keine Units angelegt. Unter "Verwalten" die erste Unit hinzufügen.</div>';
+    }
+    for(const unit of unitNames){
+      const cards = decks[unit];
+      const t = todayStr();
+      const dueCount = cards.filter(c=>c.due<=t).length;
+      const row = document.createElement('div');
+      row.className = 'deck-row';
+      row.innerHTML = `<div><div class="name">${escapeHtml(unit)}</div><div class="meta">${cards.length} Vokabeln</div></div><div class="pill ${dueCount===0?'zero':''}">${dueCount} fällig</div>`;
+      list.appendChild(row);
+    }
+    const btn = document.getElementById('start-learn-btn');
+    btn.disabled = due.length === 0;
+    btn.textContent = due.length === 0 ? '🦝 Alles erledigt für heute!' : 'Fällige wiederholen';
+    renderStarStats();
+    renderStreakStat();
+    renderDailyChallengeCard();
+  }
+
+  function renderManage(){
+    const listEl = document.getElementById('deck-manage-list');
+    listEl.innerHTML = '';
+    const unitNames = Object.keys(decks);
+    if(unitNames.length === 0){
+      listEl.innerHTML = '<div style="font-size:0.82rem;color:var(--ink-soft);">Noch keine Units vorhanden.</div>';
+      return;
+    }
+    for(const unit of unitNames){
+      const row = document.createElement('div');
+      row.className = 'deck-manage-row';
+      row.innerHTML = `<span>${escapeHtml(unit)} <span style="color:var(--ink-soft);">(${decks[unit].length})</span></span>`;
+      const btn = document.createElement('button');
+      btn.className = 'del-btn'; btn.textContent = 'Löschen';
+      btn.onclick = async () => {
+        if(confirm(`"${unit}" wirklich löschen?`)){
+          delete decks[unit]; await saveDecks();
+          renderOverview(); renderManage(); renderPracticeDeckList();
+        }
+      };
+      row.appendChild(btn);
+      listEl.appendChild(row);
+    }
+  }
+
+  // ============ Wiederholen (Spaced Repetition) ============
+  function startReview(){
+    queue = shuffle(dueCards());
+    sessionTotal = queue.length;
+    currentIdx = 0;
+    switchTab('review');
+    renderReviewCard();
+  }
+
+  function renderReviewCard(){
+    const area = document.getElementById('learn-area');
+    const fill = document.getElementById('progress-fill');
+    if(currentIdx >= queue.length){
+      fill.style.width = '100%';
+      area.innerHTML = `<div class="done-banner"><div class="emoji">🦝🎉</div><h3>Fertig für heute!</h3><div style="color:var(--ink-soft);font-size:0.88rem;">${sessionTotal} Vokabel${sessionTotal===1?'':'n'} wiederholt.</div></div>`;
+      return;
+    }
+    const pct = sessionTotal ? Math.round((currentIdx/sessionTotal)*100) : 0;
+    fill.style.width = pct + '%';
+
+    const card = queue[currentIdx];
+    const d = applyDirection(card, settings.globalDirection);
+    flipped = false;
+    area.innerHTML = `
+      <div class="flash" id="flash-card">
+        <span class="tag">${escapeHtml(card.unit)}</span>
+        <span class="dirtag">${d.qLabel} → ${d.aLabel}</span>
+        <button class="speak-btn" id="speak-btn" title="Vorlesen">🔊</button>
+        <div class="front">${escapeHtml(d.q)}</div>
+        <div class="hint" id="flip-hint">Antippen zum Aufdecken</div>
+      </div>
+      <div class="rate-row" id="rate-row" style="display:none;">
+        <button class="rate-btn rate-again" data-rate="again">Nochmal<span class="sub">morgen</span></button>
+        <button class="rate-btn rate-good" data-rate="good">Gut<span class="sub">bald wieder</span></button>
+        <button class="rate-btn rate-easy" data-rate="easy">Leicht<span class="sub">später wieder</span></button>
+      </div>
+    `;
+    document.getElementById('flash-card').addEventListener('click', (e)=>{ if(e.target.id === 'speak-btn') return; revealReviewCard(d); });
+    document.getElementById('speak-btn').addEventListener('click', (e)=>{ e.stopPropagation(); speak(card.en); });
+  }
+  function revealReviewCard(d){
+    if(flipped) return;
+    flipped = true;
+    const flash = document.getElementById('flash-card');
+    document.getElementById('flip-hint').remove();
+    const backDiv = document.createElement('div');
+    backDiv.className = 'back';
+    backDiv.textContent = d.a;
+    flash.appendChild(backDiv);
+    document.getElementById('rate-row').style.display = 'grid';
+  }
+  async function rateCard(rating){
+    const card = queue[currentIdx];
+    const unitCards = decks[card.unit];
+    const idx = unitCards.findIndex(c => c.id === card.id);
+    if(idx === -1){ currentIdx++; renderReviewCard(); return; }
+    const real = unitCards[idx];
+    if(rating === 'again'){ real.box = 0; real.due = todayStr(); queue.push(Object.assign({unit: card.unit}, real)); }
+    else if(rating === 'good'){ real.box = Math.min(real.box + 1, BOX_INTERVALS.length - 1); real.due = addDays(todayStr(), BOX_INTERVALS[real.box]); await awardStars(1, 'Wiederholen: Gut'); }
+    else if(rating === 'easy'){ real.box = Math.min(real.box + 2, BOX_INTERVALS.length - 1); real.due = addDays(todayStr(), BOX_INTERVALS[real.box]); await awardStars(2, 'Wiederholen: Leicht'); }
+    await saveDecks();
+    await markPracticedToday();
+    currentIdx++;
+    renderReviewCard();
+  }
+  document.getElementById('learn-area').addEventListener('click', (e)=>{ const btn = e.target.closest('.rate-btn'); if(btn) rateCard(btn.dataset.rate); });
+
+  // ============ Sprachausgabe ============
+  let chosenVoiceURI = null, chosenRate = 0.9;
+  function scoreVoice(v){
+    const n = (v.name || '').toLowerCase();
+    let score = 0;
+    if(!v.lang || !v.lang.toLowerCase().startsWith('en')) return -1;
+    if(n.includes('enhanced') || n.includes('premium') || n.includes('neural')) score += 5;
+    if(n.includes('siri')) score += 4;
+    if(['samantha','daniel','karen','moira','tessa','serena','stephanie','ava','allison','nicky'].some(k=>n.includes(k))) score += 3;
+    if(v.lang.toLowerCase() === 'en-gb' || v.lang.toLowerCase() === 'en-us') score += 1;
+    if(n.includes('compact')) score -= 3;
+    if(v.localService) score += 1;
+    return score;
+  }
+  function populateVoiceList(){
+    const select = document.getElementById('voice-select');
+    const voices = window.speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('en')).sort((a,b) => scoreVoice(b) - scoreVoice(a));
+    if(voices.length === 0) return;
+    const prevValue = chosenVoiceURI || select.value;
+    select.innerHTML = '';
+    for(const v of voices){ const opt = document.createElement('option'); opt.value = v.voiceURI; opt.textContent = v.name + ' (' + v.lang + ')'; select.appendChild(opt); }
+    if(prevValue && voices.some(v=>v.voiceURI===prevValue)){ select.value = prevValue; chosenVoiceURI = prevValue; }
+    else { select.value = voices[0].voiceURI; chosenVoiceURI = voices[0].voiceURI; }
+  }
+  async function loadVoicePref(){
+    try{
+      const res = await Store.get(VOICE_PREF_KEY, false);
+      if(res && res.value){ const pref = JSON.parse(res.value); chosenVoiceURI = pref.voiceURI || null; chosenRate = pref.rate || 0.9; }
+    }catch(e){}
+    document.getElementById('rate-range').value = chosenRate;
+    document.getElementById('rate-val').textContent = chosenRate;
+  }
+  async function saveVoicePref(){ try{ await Store.set(VOICE_PREF_KEY, JSON.stringify({voiceURI: chosenVoiceURI, rate: chosenRate}), false); }catch(e){} }
+  function speak(text){
+    try{
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      const voices = window.speechSynthesis.getVoices();
+      const selected = voices.find(v => v.voiceURI === chosenVoiceURI);
+      if(selected){ utter.voice = selected; utter.lang = selected.lang; } else { utter.lang = 'en-GB'; }
+      utter.rate = chosenRate;
+      window.speechSynthesis.speak(utter);
+    }catch(e){ console.error('TTS nicht verfügbar', e); }
+  }
+  document.getElementById('voice-select').addEventListener('change', (e)=>{ chosenVoiceURI = e.target.value; saveVoicePref(); });
+  document.getElementById('rate-range').addEventListener('input', (e)=>{ chosenRate = parseFloat(e.target.value); document.getElementById('rate-val').textContent = chosenRate.toFixed(2); });
+  document.getElementById('rate-range').addEventListener('change', saveVoicePref);
+  document.getElementById('voice-test-btn').addEventListener('click', ()=> speak('Nice to meet you.'));
+
+  function setSegActive(segId, value){
+    document.querySelectorAll('#' + segId + ' button').forEach(b=>{
+      b.classList.toggle('active', b.dataset.dir === value);
+    });
+  }
+  document.getElementById('global-direction-seg').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    settings.globalDirection = btn.dataset.dir;
+    setSegActive('global-direction-seg', settings.globalDirection);
+    saveSettings();
+  });
+
+  // ============ Üben: Deck- & Modusauswahl ============
+  let practiceDirection = 'en-de';
+  let practiceDeckName = null;
+
+  function renderPracticeDeckList(){
+    const list = document.getElementById('practice-deck-list');
+    list.innerHTML = '';
+    const unitNames = Object.keys(decks);
+    if(unitNames.length === 0){
+      list.innerHTML = '<div class="learn-empty">Noch keine Units angelegt.</div>';
+      return;
+    }
+    const allRow = document.createElement('div');
+    allRow.className = 'deck-row';
+    allRow.innerHTML = `<div><div class="name">Alle Units gemischt</div><div class="meta">${allCards().length} Vokabeln</div></div><span class="chevron">›</span>`;
+    allRow.addEventListener('click', ()=> openPracticeDeck('__all__'));
+    list.appendChild(allRow);
+    for(const unit of unitNames){
+      const row = document.createElement('div');
+      row.className = 'deck-row';
+      row.innerHTML = `<div><div class="name">${escapeHtml(unit)}</div><div class="meta">${decks[unit].length} Vokabeln</div></div><span class="chevron">›</span>`;
+      row.addEventListener('click', ()=> openPracticeDeck(unit));
+      list.appendChild(row);
+    }
+  }
+  function practiceDeckCards(name){
+    if(name === '__all__') return allCards();
+    return (decks[name] || []).map(c => Object.assign({unit: name}, c));
+  }
+  function openPracticeDeck(name){
+    practiceDeckName = name;
+    practiceDirection = 'en-de';
+    setSegActive('direction-seg', practiceDirection);
+    document.getElementById('practice-deck-name').textContent = name === '__all__' ? 'Alle Units gemischt' : name;
+    document.getElementById('practice-deck-meta').textContent = practiceDeckCards(name).length + ' Vokabeln';
+    document.getElementById('practice-deckselect').style.display = 'none';
+    document.getElementById('practice-modeselect').style.display = 'block';
+    document.getElementById('practice-play').style.display = 'none';
+  }
+  document.getElementById('practice-back-to-decks').addEventListener('click', ()=>{
+    document.getElementById('practice-deckselect').style.display = 'block';
+    document.getElementById('practice-modeselect').style.display = 'none';
+    renderPracticeDeckList();
+  });
+  document.getElementById('direction-seg').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    practiceDirection = btn.dataset.dir;
+    setSegActive('direction-seg', practiceDirection);
+  });
+
+  function showPracticeHome(){
+    document.getElementById('practice-deckselect').style.display = 'none';
+    document.getElementById('practice-modeselect').style.display = 'block';
+    document.getElementById('practice-play').style.display = 'none';
+    if(matchTimer){ clearInterval(matchTimer); matchTimer = null; }
+    if(typeof blitzTimer !== 'undefined' && blitzTimer){ clearInterval(blitzTimer); blitzTimer = null; blitzActive = false; }
+  }
+  function showPracticePlay(){
+    document.getElementById('practice-modeselect').style.display = 'none';
+    document.getElementById('practice-play').style.display = 'block';
+  }
+
+  document.getElementById('mode-karteikarten').addEventListener('click', startBrowseMode);
+  document.getElementById('mode-lernen').addEventListener('click', startLearnMode);
+  document.getElementById('mode-testen').addEventListener('click', startTestMode);
+  document.getElementById('mode-zuordnen').addEventListener('click', startMatchGame);
+  document.getElementById('mode-blitzrunde').addEventListener('click', startBlitzMode);
+
+  // ---- Blitzrunde (60 Sekunden) ----
+  let blitzPool = [], blitzTimer = null, blitzSecondsLeft = 60, blitzCorrect = 0, blitzActive = false;
+  function startBlitzMode(){
+    blitzPool = practiceDeckCards(practiceDeckName);
+    if(blitzPool.length < 4){ alert('Für die Blitzrunde werden mindestens 4 Vokabeln benötigt.'); return; }
+    blitzSecondsLeft = 60;
+    blitzCorrect = 0;
+    blitzActive = true;
+    showPracticePlay();
+    renderBlitzQuestion();
+    if(blitzTimer) clearInterval(blitzTimer);
+    blitzTimer = setInterval(()=>{
+      blitzSecondsLeft--;
+      const timerEl = document.getElementById('blitz-timer');
+      if(timerEl) timerEl.textContent = blitzSecondsLeft + 's';
+      if(blitzSecondsLeft <= 0){ finishBlitzMode(); }
+    }, 1000);
+  }
+  function renderBlitzQuestion(){
+    if(!blitzActive) return;
+    const play = document.getElementById('practice-play');
+    const card = blitzPool[Math.floor(Math.random()*blitzPool.length)];
+    const d = applyDirection(card, practiceDirection);
+    const distractors = shuffle(blitzPool.filter(c => c.id !== card.id)).slice(0, 3).map(c => applyDirection(c, d.dir).a);
+    const options = shuffle([d.a, ...distractors]);
+    play.innerHTML = `
+      <button class="back-link" id="blitz-back">← Abbrechen</button>
+      <div class="game-header">
+        <span class="timer-big" id="blitz-timer">${blitzSecondsLeft}s</span>
+        <span class="game-stat">✅ ${blitzCorrect}</span>
+      </div>
+      <div class="quiz-card"><div class="front">${escapeHtml(d.q)}</div></div>
+      <div class="quiz-options" id="blitz-options"></div>
+    `;
+    document.getElementById('blitz-back').addEventListener('click', ()=>{ blitzActive = false; if(blitzTimer){ clearInterval(blitzTimer); blitzTimer=null; } showPracticeHome(); });
+    const optDiv = document.getElementById('blitz-options');
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'quiz-opt';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => {
+        if(!blitzActive) return;
+        if(opt === d.a){ blitzCorrect++; }
+        renderBlitzQuestion();
+      });
+      optDiv.appendChild(btn);
+    });
+  }
+  async function finishBlitzMode(){
+    blitzActive = false;
+    if(blitzTimer){ clearInterval(blitzTimer); blitzTimer = null; }
+    if(blitzCorrect > 0) await awardStars(blitzCorrect, 'Blitzrunde: ' + blitzCorrect + ' richtig');
+    await markPracticedToday();
+    const play = document.getElementById('practice-play');
+    play.innerHTML = `
+      <button class="back-link" id="blitz-back-2">← Zurück</button>
+      <div class="game-done">
+        <div class="emoji">⚡🦝</div>
+        <div class="score">${blitzCorrect}</div>
+        <div class="score-label">richtige Antworten in 60 Sekunden</div>
+      </div>
+      <button class="primary-btn coral" id="blitz-again">Nochmal</button>
+    `;
+    document.getElementById('blitz-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('blitz-again').addEventListener('click', startBlitzMode);
+  }
+
+  // ---- Karteikarten (freies Durchblättern) ----
+  let browseCards = [], browseIdx = 0, browseFlipped = false;
+  function startBrowseMode(){
+    browseCards = shuffle(practiceDeckCards(practiceDeckName));
+    if(browseCards.length === 0){ alert('Diese Unit hat keine Vokabeln.'); return; }
+    browseIdx = 0;
+    showPracticePlay();
+    renderBrowseCard();
+  }
+  function renderBrowseCard(){
+    const play = document.getElementById('practice-play');
+    const card = browseCards[browseIdx];
+    const d = applyDirection(card, practiceDirection);
+    browseFlipped = false;
+    play.innerHTML = `
+      <button class="back-link" id="browse-back">← Zurück</button>
+      <div class="game-header">
+        <span class="game-stat">${browseIdx+1} / ${browseCards.length}</span>
+        <span class="game-stat">${d.qLabel} → ${d.aLabel}</span>
+      </div>
+      <div class="flash" id="browse-flash">
+        <button class="speak-btn" id="browse-speak-btn" title="Vorlesen">🔊</button>
+        <div class="front">${escapeHtml(d.q)}</div>
+        <div class="hint" id="browse-hint">Antippen zum Aufdecken</div>
+      </div>
+      <div class="nav-row">
+        <button class="nav-btn" id="browse-prev" ${browseIdx===0?'disabled':''}>← Vorherige</button>
+        <button class="nav-btn" id="browse-next" ${browseIdx===browseCards.length-1?'disabled':''}>Nächste →</button>
+      </div>
+    `;
+    document.getElementById('browse-back').addEventListener('click', showPracticeHome);
+    document.getElementById('browse-flash').addEventListener('click', (e)=>{
+      if(e.target.id === 'browse-speak-btn') return;
+      if(browseFlipped) return;
+      browseFlipped = true;
+      document.getElementById('browse-hint').remove();
+      const backDiv = document.createElement('div');
+      backDiv.className = 'back';
+      backDiv.textContent = d.a;
+      document.getElementById('browse-flash').appendChild(backDiv);
+    });
+    document.getElementById('browse-speak-btn').addEventListener('click', (e)=>{ e.stopPropagation(); speak(card.en); });
+    document.getElementById('browse-prev').addEventListener('click', ()=>{ if(browseIdx>0){ browseIdx--; renderBrowseCard(); } });
+    document.getElementById('browse-next').addEventListener('click', ()=>{ if(browseIdx<browseCards.length-1){ browseIdx++; renderBrowseCard(); } });
+  }
+
+  // ---- Lernen (Multiple Choice mit Feedback, Fehler wiederholen) ----
+  let learnPool = [], learnQueue = [], learnIdx = 0, learnMissed = [], learnRoundTotal = 0, learnCorrectFirstTry = 0, learnDeckKey='';
+  function startLearnMode(){
+    learnPool = practiceDeckCards(practiceDeckName);
+    if(learnPool.length < 4){ alert('Für diesen Modus werden mindestens 4 Vokabeln benötigt.'); return; }
+    learnQueue = shuffle(learnPool);
+    learnRoundTotal = learnQueue.length;
+    learnIdx = 0;
+    learnMissed = [];
+    learnCorrectFirstTry = 0;
+    learnDeckKey = 'Lernen:' + practiceDeckName + ':' + practiceDirection;
+    showPracticePlay();
+    renderLearnQuestion();
+  }
+  function renderLearnQuestion(){
+    const play = document.getElementById('practice-play');
+    if(learnIdx >= learnQueue.length){
+      if(learnMissed.length > 0){
+        learnQueue = shuffle(learnMissed);
+        learnMissed = [];
+        learnIdx = 0;
+      } else {
+        finishLearnMode();
+        return;
+      }
+    }
+    const card = learnQueue[learnIdx];
+    const d = applyDirection(card, practiceDirection);
+    const distractors = shuffle(learnPool.filter(c => c.id !== card.id)).slice(0, 3).map(c => applyDirection(c, d.dir).a);
+    const options = shuffle([d.a, ...distractors]);
+
+    play.innerHTML = `
+      <button class="back-link" id="learn-back">← Zurück</button>
+      <div class="game-header">
+        <span class="game-stat">${d.qLabel} → ${d.aLabel}</span>
+        <span class="game-stat">✅ ${learnCorrectFirstTry} / ${learnRoundTotal}</span>
+      </div>
+      <div class="quiz-card">
+        <button class="speak-btn" id="learn-speak-btn" title="Vorlesen" style="position:absolute;top:12px;right:12px;">🔊</button>
+        <div class="front">${escapeHtml(d.q)}</div>
+      </div>
+      <div class="quiz-options" id="learn-options"></div>
+    `;
+    document.getElementById('learn-back').addEventListener('click', showPracticeHome);
+    document.getElementById('learn-speak-btn').addEventListener('click', ()=> speak(card.en));
+    const optDiv = document.getElementById('learn-options');
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'quiz-opt';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => onLearnAnswer(btn, opt, d.a, card));
+      optDiv.appendChild(btn);
+    });
+  }
+  function onLearnAnswer(btn, chosen, correctAnswer, card){
+    const allBtns = document.querySelectorAll('#learn-options .quiz-opt');
+    allBtns.forEach(b => b.disabled = true);
+    if(chosen === correctAnswer){
+      btn.classList.add('correct');
+      learnCorrectFirstTry++;
+      awardStars(1, 'Lernen: richtig');
+    } else {
+      btn.classList.add('wrong');
+      allBtns.forEach(b => { if(b.textContent === correctAnswer) b.classList.add('reveal-correct'); });
+      learnMissed.push(card);
+    }
+    setTimeout(()=>{ learnIdx++; renderLearnQuestion(); }, 900);
+  }
+  async function finishLearnMode(){
+    await markPracticedToday();
+    const pct = Math.round((learnCorrectFirstTry / learnRoundTotal) * 100);
+    const prevBest = bestScores[learnDeckKey];
+    const isNewBest = (prevBest === undefined) || (pct > prevBest);
+    if(isNewBest){ bestScores[learnDeckKey] = pct; await saveBestScores(); }
+    let emoji = pct === 100 ? '🦝🏆' : (pct >= 70 ? '🦝👍' : '🦝💪');
+    const play = document.getElementById('practice-play');
+    play.innerHTML = `
+      <button class="back-link" id="learn-back-2">← Zurück</button>
+      <div class="game-done">
+        <div class="emoji">${emoji}</div>
+        <div class="score">${learnCorrectFirstTry} / ${learnRoundTotal}</div>
+        <div class="score-label">im ersten Versuch richtig (${pct}%)</div>
+        ${isNewBest ? '<div class="best-badge">🏆 Neue Bestleistung!</div>' : `<div class="best-badge">Beste Leistung: ${prevBest}%</div>`}
+      </div>
+      <button class="primary-btn coral" id="learn-again">Nochmal üben</button>
+    `;
+    document.getElementById('learn-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('learn-again').addEventListener('click', startLearnMode);
+  }
+
+  // ---- Testen (echter Test, Feedback erst am Ende) ----
+  let testPool = [], testQueue = [], testIdx = 0, testAnswers = [], testDeckKey = '';
+  function startTestMode(){
+    testPool = practiceDeckCards(practiceDeckName);
+    if(testPool.length < 4){ alert('Für diesen Modus werden mindestens 4 Vokabeln benötigt.'); return; }
+    testQueue = shuffle(testPool).slice(0, Math.min(15, testPool.length));
+    testIdx = 0;
+    testAnswers = [];
+    testDeckKey = 'Testen:' + practiceDeckName + ':' + practiceDirection;
+    showPracticePlay();
+    renderTestQuestion();
+  }
+  function renderTestQuestion(){
+    const play = document.getElementById('practice-play');
+    if(testIdx >= testQueue.length){ finishTestMode(); return; }
+    const card = testQueue[testIdx];
+    const d = applyDirection(card, practiceDirection);
+    const distractors = shuffle(testPool.filter(c => c.id !== card.id)).slice(0, 3).map(c => applyDirection(c, d.dir).a);
+    const options = shuffle([d.a, ...distractors]);
+
+    play.innerHTML = `
+      <button class="back-link" id="test-back">← Test abbrechen</button>
+      <div class="game-header">
+        <span class="game-stat">Frage ${testIdx+1} / ${testQueue.length}</span>
+        <span class="game-stat">${d.qLabel} → ${d.aLabel}</span>
+      </div>
+      <div class="quiz-card">
+        <div class="front">${escapeHtml(d.q)}</div>
+      </div>
+      <div class="quiz-options" id="test-options"></div>
+    `;
+    document.getElementById('test-back').addEventListener('click', showPracticeHome);
+    const optDiv = document.getElementById('test-options');
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'quiz-opt';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#test-options .quiz-opt').forEach(b => b.disabled = true);
+        btn.style.borderColor = 'var(--sky)';
+        testAnswers.push({q: d.q, chosen: opt, correct: d.a, isCorrect: opt === d.a});
+        setTimeout(()=>{ testIdx++; renderTestQuestion(); }, 250);
+      });
+      optDiv.appendChild(btn);
+    });
+  }
+  async function finishTestMode(){
+    const correctCount = testAnswers.filter(a => a.isCorrect).length;
+    const pct = Math.round((correctCount / testAnswers.length) * 100);
+    if(correctCount > 0) await awardStars(correctCount * 2, 'Testen: ' + correctCount + ' richtig');
+    await markPracticedToday();
+    const prevBest = bestScores[testDeckKey];
+    const isNewBest = (prevBest === undefined) || (pct > prevBest);
+    if(isNewBest){ bestScores[testDeckKey] = pct; await saveBestScores(); }
+    let emoji = pct === 100 ? '🦝🏆' : (pct >= 70 ? '🦝👍' : '🦝💪');
+
+    const reviewHtml = testAnswers.map(a => `
+      <div class="review-item ${a.isCorrect ? 'correct' : 'wrong'}">
+        <div class="q">${escapeHtml(a.q)}</div>
+        <div class="a">${a.isCorrect ? '✅ ' + escapeHtml(a.correct) : '❌ deine Antwort: ' + escapeHtml(a.chosen) + ' · richtig: ' + escapeHtml(a.correct)}</div>
+      </div>
+    `).join('');
+
+    const play = document.getElementById('practice-play');
+    play.innerHTML = `
+      <button class="back-link" id="test-back-2">← Zurück</button>
+      <div class="game-done">
+        <div class="emoji">${emoji}</div>
+        <div class="score">${correctCount} / ${testAnswers.length}</div>
+        <div class="score-label">richtig (${pct}%)</div>
+        ${isNewBest ? '<div class="best-badge">🏆 Neue Bestleistung!</div>' : `<div class="best-badge">Beste Leistung: ${prevBest}%</div>`}
+      </div>
+      <div class="review-list">${reviewHtml}</div>
+      <button class="primary-btn coral" id="test-again">Nochmal testen</button>
+    `;
+    document.getElementById('test-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('test-again').addEventListener('click', startTestMode);
+  }
+
+  // ---- Zuordnen (Match-Spiel) ----
+  let matchTimer = null, matchSeconds = 0, matchSelected = [], matchSolvedPairs = 0, matchTotalPairs = 0, matchDeckKey = '';
+  function startMatchGame(){
+    let pool = shuffle(practiceDeckCards(practiceDeckName));
+    if(pool.length < 3){ alert('Für dieses Spiel werden mindestens 3 Vokabeln benötigt.'); return; }
+    pool = pool.slice(0, 8);
+    matchTotalPairs = pool.length;
+    matchSolvedPairs = 0;
+    matchSelected = [];
+    matchSeconds = 0;
+    matchDeckKey = 'Match:' + practiceDeckName;
+
+    const tiles = [];
+    pool.forEach(c => {
+      const d = applyDirection(c, practiceDirection === 'mixed' ? 'en-de' : practiceDirection);
+      tiles.push({key: c.id, text: d.q, side:'q'});
+      tiles.push({key: c.id, text: d.a, side:'a'});
+    });
+    const shuffled = shuffle(tiles);
+
+    showPracticePlay();
+    const play = document.getElementById('practice-play');
+    play.innerHTML = `
+      <button class="back-link" id="match-back">← Zurück</button>
+      <div class="game-header">
+        <span class="game-stat" id="match-timer">0s</span>
+        <span class="game-stat" id="match-pairs">0 / ${matchTotalPairs} Paare</span>
+      </div>
+      <div class="match-grid" id="match-grid"></div>
+    `;
+    const grid = document.getElementById('match-grid');
+    shuffled.forEach((t) => {
+      const el = document.createElement('div');
+      el.className = 'match-tile';
+      el.textContent = t.text;
+      el.dataset.key = t.key;
+      el.dataset.side = t.side;
+      el.addEventListener('click', () => onMatchTileClick(el));
+      grid.appendChild(el);
+    });
+    document.getElementById('match-back').addEventListener('click', ()=>{ if(matchTimer){ clearInterval(matchTimer); matchTimer=null; } showPracticeHome(); });
+
+    if(matchTimer) clearInterval(matchTimer);
+    matchTimer = setInterval(()=>{ matchSeconds++; document.getElementById('match-timer').textContent = matchSeconds + 's'; }, 1000);
+  }
+  function onMatchTileClick(el){
+    if(el.classList.contains('correct') || el.classList.contains('selected')) return;
+    if(matchSelected.length === 2) return;
+    el.classList.add('selected');
+    matchSelected.push(el);
+    if(matchSelected.length === 2){
+      const [a,b] = matchSelected;
+      if(a.dataset.key === b.dataset.key && a.dataset.side !== b.dataset.side){
+        setTimeout(()=>{
+          a.classList.remove('selected'); b.classList.remove('selected');
+          a.classList.add('correct'); b.classList.add('correct');
+          matchSelected = [];
+          matchSolvedPairs++;
+          document.getElementById('match-pairs').textContent = matchSolvedPairs + ' / ' + matchTotalPairs + ' Paare';
+          if(matchSolvedPairs === matchTotalPairs) finishMatchGame();
+        }, 150);
+      } else {
+        a.classList.add('wrong'); b.classList.add('wrong');
+        setTimeout(()=>{ a.classList.remove('selected','wrong'); b.classList.remove('selected','wrong'); matchSelected = []; }, 500);
+      }
+    }
+  }
+  async function finishMatchGame(){
+    if(matchTimer){ clearInterval(matchTimer); matchTimer = null; }
+    const prevBest = bestScores[matchDeckKey];
+    const isNewBest = (prevBest === undefined) || (matchSeconds < prevBest);
+    if(isNewBest){ bestScores[matchDeckKey] = matchSeconds; await saveBestScores(); await awardStars(3, 'Zuordnen: neue Bestzeit'); }
+    else { await awardStars(1, 'Zuordnen: geschafft'); }
+    await markPracticedToday();
+    const play = document.getElementById('practice-play');
+    play.innerHTML = `
+      <button class="back-link" id="match-back-2">← Zurück</button>
+      <div class="game-done">
+        <div class="emoji">🦝✨</div>
+        <div class="score">${matchSeconds}s</div>
+        <div class="score-label">für ${matchTotalPairs} Paare</div>
+        ${isNewBest ? '<div class="best-badge">🏆 Neue Bestzeit!</div>' : `<div class="best-badge">Bestzeit: ${prevBest}s</div>`}
+      </div>
+      <button class="primary-btn coral" id="match-again">Nochmal spielen</button>
+    `;
+    document.getElementById('match-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('match-again').addEventListener('click', startMatchGame);
+  }
+
+  // ============ Tabs ============
+  function switchTab(tab){
+    document.querySelectorAll('nav.tabs button').forEach(b=> b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.panel').forEach(p=> p.classList.toggle('active', p.id === 'panel-' + tab));
+    if(tab === 'overview') renderOverview();
+    if(tab === 'manage') renderManage();
+    if(tab === 'practice'){
+      if(matchTimer){ clearInterval(matchTimer); matchTimer = null; }
+      document.getElementById('practice-deckselect').style.display = 'block';
+      document.getElementById('practice-modeselect').style.display = 'none';
+      document.getElementById('practice-play').style.display = 'none';
+      renderPracticeDeckList();
+    }
+  }
+  document.querySelectorAll('nav.tabs button').forEach(b=> b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
+  document.getElementById('start-learn-btn').addEventListener('click', startReview);
+
+  // ============ Import ============
+  document.getElementById('import-btn').addEventListener('click', async ()=>{
+    const nameInput = document.getElementById('unit-name');
+    const textInput = document.getElementById('import-text');
+    const msg = document.getElementById('import-msg');
+    const name = nameInput.value.trim();
+    const text = textInput.value;
+    msg.className = 'msg';
+    if(!name){ msg.textContent = 'Bitte einen Namen für die Unit eingeben.'; msg.className = 'msg err'; return; }
+    const cards = parseImport(text);
+    if(cards.length === 0){ msg.textContent = 'Keine gültigen Zeilen gefunden. Format prüfen: Englisch;Deutsch'; msg.className = 'msg err'; return; }
+    decks[name] = decks[name] ? decks[name].concat(cards) : cards;
+    await saveDecks();
+    msg.textContent = `${cards.length} Vokabeln zu "${name}" hinzugefügt.`;
+    msg.className = 'msg ok';
+    nameInput.value = ''; textInput.value = '';
+    renderOverview(); renderManage(); renderPracticeDeckList();
+  });
+
+  // ============ Geraeteabgleich: Units senden / Vollsicherung / Uebernehmen ============
+  const SYNC_FORMAT = 'vokabeltrainer-sync';
+  const UNITS_FORMAT = 'vokabeltrainer-units';
+  const SYNC_VERSION = 1;
+  const DEFAULT_SHORTCUT_NAME = 'Vokabeltrainer sichern';
+
+  function syncMsg(text, kind){
+    const el = document.getElementById('sync-msg');
+    el.textContent = text;
+    el.className = 'msg ' + (kind || 'ok');
+  }
+
+  function renderSyncInfo(){
+    if(!settings) return;
+    const nameInput = document.getElementById('sync-shortcut-name');
+    const autoBox = document.getElementById('sync-auto-shortcut');
+    nameInput.value = settings.syncShortcutName || DEFAULT_SHORTCUT_NAME;
+    autoBox.checked = settings.syncAutoShortcut !== false;
+    const st = document.getElementById('sync-status');
+    if(settings.lastBackupAt){
+      const d = new Date(settings.lastBackupAt);
+      st.textContent = 'Zuletzt auf diesem Gerät gesichert: ' + d.toLocaleString('de-DE');
+    } else {
+      st.textContent = 'Auf diesem Gerät noch nicht gesichert.';
+    }
+    renderUnitExportList();
+  }
+
+  function renderUnitExportList(){
+    const box = document.getElementById('unit-export-list');
+    const names = Object.keys(decks || {});
+    if(names.length === 0){
+      box.innerHTML = '<div style="font-size:0.82rem;color:var(--ink-soft);">Noch keine Units vorhanden.</div>';
+      return;
+    }
+    box.innerHTML = names.map(n =>
+      '<label class="check-row"><input type="checkbox" class="unit-export-cb" value="' + escapeHtml(n) + '"> ' +
+      escapeHtml(n) + ' <span style="color:var(--ink-soft);font-weight:600;">(' + decks[n].length + ')</span></label>'
+    ).join('');
+  }
+
+  function selectedExportUnits(){
+    return Array.from(document.querySelectorAll('.unit-export-cb'))
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+  }
+
+  function cardKey(card){
+    return (String(card.en || '').trim().toLowerCase()) + '|' + (String(card.de || '').trim().toLowerCase());
+  }
+
+  async function copyToClipboard(text){
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    }catch(e){}
+    try{
+      const ta = document.getElementById('sync-text');
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      return !!document.execCommand('copy');
+    }catch(e){ return false; }
+  }
+
+  async function readFromClipboard(){
+    try{
+      if(navigator.clipboard && navigator.clipboard.readText && window.isSecureContext){
+        const t = await navigator.clipboard.readText();
+        if(t && t.trim()) return t;
+      }
+    }catch(e){}
+    return null;
+  }
+
+  function runSaveShortcut(){
+    if(!settings || settings.syncAutoShortcut === false) return;
+    const name = (settings.syncShortcutName || DEFAULT_SHORTCUT_NAME);
+    setTimeout(()=>{ window.location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name); }, 250);
+  }
+
+  // ---- Units senden (nur Vokabeln, ohne Lernfortschritt) ----
+  document.getElementById('unit-export-btn').addEventListener('click', async ()=>{
+    const names = selectedExportUnits();
+    if(names.length === 0){ syncMsg('Keine Unit ausgewählt.', 'err'); return; }
+
+    const units = {};
+    let total = 0;
+    for(const n of names){
+      units[n] = (decks[n] || []).map(c => ({ en: c.en, de: c.de }));
+      total += units[n].length;
+    }
+    const payload = JSON.stringify({
+      format: UNITS_FORMAT,
+      version: SYNC_VERSION,
+      exportedAt: new Date().toISOString(),
+      unitCount: names.length,
+      cardCount: total,
+      units: units
+    });
+
+    document.getElementById('sync-text').value = payload;
+    const copied = await copyToClipboard(payload);
+    if(!copied){
+      syncMsg('Zwischenablage blockiert. Den Text unten von Hand kopieren, dann den Kurzbefehl starten.', 'err');
+      return;
+    }
+    syncMsg(names.length + (names.length === 1 ? ' Unit' : ' Units') + ' kopiert (' + total + ' Vokabeln).', 'ok');
+    runSaveShortcut();
+  });
+
+  // ---- Vollsicherung ----
+  function buildSnapshot(){
+    return JSON.stringify({
+      format: SYNC_FORMAT,
+      version: SYNC_VERSION,
+      exportedAt: new Date().toISOString(),
+      cardCount: allCards().length,
+      starBalance: stars.balance,
+      data: {
+        decks: decks,
+        bestScores: bestScores,
+        settings: settings,
+        stars: stars,
+        streak: streakData,
+        daily: dailyData,
+        pin: pinData
+      }
+    });
+  }
+
+  document.getElementById('sync-export-btn').addEventListener('click', async ()=>{
+    const snapshot = buildSnapshot();
+    document.getElementById('sync-text').value = snapshot;
+    const copied = await copyToClipboard(snapshot);
+
+    settings.lastBackupAt = new Date().toISOString();
+    await saveSettings();
+    renderSyncInfo();
+
+    if(!copied){
+      syncMsg('Zwischenablage blockiert. Den Text unten von Hand kopieren, dann den Kurzbefehl starten.', 'err');
+      return;
+    }
+    syncMsg('Stand kopiert (' + allCards().length + ' Vokabeln, ' + stars.balance + ' Sterne).', 'ok');
+    runSaveShortcut();
+  });
+
+  // ---- Uebernehmen (erkennt Units oder Vollsicherung) ----
+  async function importUnits(snap){
+    const units = snap.units || {};
+    const names = Object.keys(units);
+    if(names.length === 0){ syncMsg('Der Text enthält keine Units.', 'err'); return; }
+
+    const plan = [];
+    for(const n of names){
+      const existing = decks[n] || [];
+      const known = new Set(existing.map(cardKey));
+      const fresh = [];
+      let dupes = 0;
+      for(const c of units[n]){
+        if(!c || !c.en || !c.de) continue;
+        const key = (String(c.en).trim().toLowerCase()) + '|' + (String(c.de).trim().toLowerCase());
+        if(known.has(key)){ dupes++; continue; }
+        known.add(key);
+        fresh.push({
+          id: 'c' + Date.now() + Math.random().toString(36).slice(2,6),
+          en: String(c.en).trim(),
+          de: String(c.de).trim(),
+          box: 0,
+          due: todayStr()
+        });
+      }
+      plan.push({ name: n, isNew: !decks[n], fresh: fresh, dupes: dupes });
+    }
+
+    const lines = plan.map(p =>
+      '• ' + p.name + (p.isNew ? ' (neue Unit)' : '') + ': ' + p.fresh.length + ' neu' +
+      (p.dupes ? ', ' + p.dupes + ' schon vorhanden' : '')
+    ).join('\n');
+    const totalNew = plan.reduce((s,p)=> s + p.fresh.length, 0);
+
+    if(totalNew === 0){
+      syncMsg('Alle Vokabeln sind auf diesem Gerät schon vorhanden. Nichts geändert.', 'ok');
+      return;
+    }
+    if(!confirm('Diese Vokabeln hinzufügen?\n\n' + lines + '\n\nLernfortschritt und Sterne bleiben unverändert.')) return;
+
+    for(const p of plan){
+      if(p.fresh.length === 0) continue;
+      decks[p.name] = decks[p.name] ? decks[p.name].concat(p.fresh) : p.fresh;
+    }
+    await saveDecks();
+    renderOverview();
+    renderManage();
+    renderPracticeDeckList();
+    renderUnitExportList();
+    document.getElementById('sync-text').value = '';
+    syncMsg(totalNew + ' Vokabeln hinzugefügt.', 'ok');
+  }
+
+  async function importFullSnapshot(snap){
+    if(!snap.data || typeof snap.data.decks !== 'object'){
+      syncMsg('Die Vollsicherung ist unvollständig.', 'err');
+      return;
+    }
+    // PIN nur abfragen, wenn auf diesem Geraet schon einer eingerichtet ist –
+    // beim ersten Uebernehmen auf einem neuen Geraet kommt der PIN ohnehin mit.
+    if(pinData.pin){
+      const ok = await requirePin();
+      if(!ok) return;
+    }
+    const when = snap.exportedAt ? new Date(snap.exportedAt).toLocaleString('de-DE') : 'unbekannt';
+    const confirmed = confirm(
+      'Kompletten Stand übernehmen?\n\n' +
+      'Gesichert am: ' + when + '\n' +
+      'Vokabeln: ' + (snap.cardCount != null ? snap.cardCount : '?') + '\n' +
+      'Sterne: ' + (snap.starBalance != null ? snap.starBalance : '?') + '\n\n' +
+      'Der aktuelle Stand auf diesem Gerät wird dabei vollständig ersetzt – auch Lernfortschritt und Sterne.'
+    );
+    if(!confirmed) return;
+
+    const d = snap.data;
+    if(d.decks) decks = d.decks;
+    if(d.bestScores) bestScores = d.bestScores;
+    if(d.settings) settings = d.settings;
+    if(d.stars) stars = d.stars;
+    if(d.streak) streakData = d.streak;
+    if(d.daily) dailyData = d.daily;
+    if(d.pin) pinData = d.pin;
+
+    await saveDecks();
+    await saveBestScores();
+    await saveSettings();
+    await saveStars();
+    await saveStreak();
+    await saveDaily();
+    await savePin();
+
+    setSegActive('global-direction-seg', settings.globalDirection || 'en-de');
+    renderOverview();
+    renderManage();
+    renderPracticeDeckList();
+    renderStarLog();
+    renderDailyChallengeCard();
+    renderSyncInfo();
+    document.getElementById('sync-text').value = '';
+    syncMsg('Stand vom ' + when + ' übernommen.', 'ok');
+  }
+
+  document.getElementById('sync-import-btn').addEventListener('click', async ()=>{
+    let raw = await readFromClipboard();
+    if(!raw) raw = document.getElementById('sync-text').value.trim();
+    if(!raw){
+      syncMsg('Kein Text gefunden. Den kopierten Text in das Feld unten einfügen.', 'err');
+      return;
+    }
+
+    let snap;
+    try{ snap = JSON.parse(raw); }
+    catch(e){ syncMsg('Der Text ist kein gültiger Vokabeltrainer-Text.', 'err'); return; }
+
+    if(!snap || (snap.format !== SYNC_FORMAT && snap.format !== UNITS_FORMAT)){
+      syncMsg('Der Text stammt nicht aus dem Vokabeltrainer.', 'err');
+      return;
+    }
+
+    if(snap.format === UNITS_FORMAT) await importUnits(snap);
+    else await importFullSnapshot(snap);
+  });
+
+  document.getElementById('sync-shortcut-name').addEventListener('change', async (e)=>{
+    settings.syncShortcutName = e.target.value.trim() || DEFAULT_SHORTCUT_NAME;
+    e.target.value = settings.syncShortcutName;
+    await saveSettings();
+  });
+
+  document.getElementById('sync-auto-shortcut').addEventListener('change', async (e)=>{
+    settings.syncAutoShortcut = e.target.checked;
+    await saveSettings();
+  });
+
+  document.querySelector('nav.tabs button[data-tab="manage"]').addEventListener('click', renderSyncInfo);
+
+  // ============ Init ============
+  if('speechSynthesis' in window){
+    populateVoiceList();
+    window.speechSynthesis.onvoiceschanged = populateVoiceList;
+  }
+  loadVoicePref().then(()=>{ if('speechSynthesis' in window) populateVoiceList(); });
+  loadAll();
+})();
+</script>
+</body>
+</html>
