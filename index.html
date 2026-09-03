@@ -193,7 +193,7 @@
 <body>
 <div class="app">
   <header>
-    <div class="mascot">🦝</div>
+    <div class="mascot">🐴</div>
     <div>
       <h1>Vokabeltrainer</h1>
       <div class="header-sub">für Amy · mit Vorlesefunktion</div>
@@ -382,6 +382,16 @@
       <textarea id="import-text" placeholder="Englisch;Deutsch&#10;Englisch;Deutsch"></textarea>
       <button class="primary-btn sky" id="import-btn">Unit importieren</button>
       <div class="msg" id="import-msg"></div>
+    </div>
+
+    <div class="manage-block">
+      <h3>Zurücksetzen</h3>
+      <div class="hint-box">
+        Setzt sauber auf Null, ohne Eintrag im Verlauf. Die Vokabeln selbst bleiben in beiden Fällen erhalten.
+      </div>
+      <button class="secondary-btn" id="reset-stars-btn" style="margin-top:0;">Sternenkonto und Verlauf zurücksetzen</button>
+      <button class="secondary-btn" id="reset-progress-btn">Lernfortschritt, Streak und Bestzeiten zurücksetzen</button>
+      <div class="msg" id="reset-msg"></div>
     </div>
 
     <div class="manage-block">
@@ -712,7 +722,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     let bonus = 3 + (dailyCorrect === dailyQueue.length ? 2 : 0);
     await awardStars(bonus, 'Tages-Herausforderung (' + dailyCorrect + '/' + dailyQueue.length + ')');
     const play = document.getElementById('practice-play');
-    const emoji = dailyCorrect === dailyQueue.length ? '🦝🏆' : '🦝👍';
+    const emoji = dailyCorrect === dailyQueue.length ? '🐴🏆' : '🐴👍';
     play.innerHTML = `
       <div class="game-done">
         <div class="emoji">${emoji}</div>
@@ -824,7 +834,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     }
     const btn = document.getElementById('start-learn-btn');
     btn.disabled = due.length === 0;
-    btn.textContent = due.length === 0 ? '🦝 Alles erledigt für heute!' : 'Fällige wiederholen';
+    btn.textContent = due.length === 0 ? '🐴 Alles erledigt für heute!' : 'Fällige wiederholen';
     renderStarStats();
     renderStreakStat();
     renderDailyChallengeCard();
@@ -869,7 +879,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     const fill = document.getElementById('progress-fill');
     if(currentIdx >= queue.length){
       fill.style.width = '100%';
-      area.innerHTML = `<div class="done-banner"><div class="emoji">🦝🎉</div><h3>Fertig für heute!</h3><div style="color:var(--ink-soft);font-size:0.88rem;">${sessionTotal} Vokabel${sessionTotal===1?'':'n'} wiederholt.</div></div>`;
+      area.innerHTML = `<div class="done-banner"><div class="emoji">🐴🎉</div><h3>Fertig für heute!</h3><div style="color:var(--ink-soft);font-size:0.88rem;">${sessionTotal} Vokabel${sessionTotal===1?'':'n'} wiederholt.</div></div>`;
       return;
     }
     const pct = sessionTotal ? Math.round((currentIdx/sessionTotal)*100) : 0;
@@ -1108,7 +1118,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     play.innerHTML = `
       <button class="back-link" id="blitz-back-2">← Zurück</button>
       <div class="game-done">
-        <div class="emoji">⚡🦝</div>
+        <div class="emoji">⚡🐴</div>
         <div class="score">${blitzCorrect}</div>
         <div class="score-label">richtige Antworten in 60 Sekunden</div>
       </div>
@@ -1238,7 +1248,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     const prevBest = bestScores[learnDeckKey];
     const isNewBest = (prevBest === undefined) || (pct > prevBest);
     if(isNewBest){ bestScores[learnDeckKey] = pct; await saveBestScores(); }
-    let emoji = pct === 100 ? '🦝🏆' : (pct >= 70 ? '🦝👍' : '🦝💪');
+    let emoji = pct === 100 ? '🐴🏆' : (pct >= 70 ? '🐴👍' : '🐴💪');
     const play = document.getElementById('practice-play');
     play.innerHTML = `
       <button class="back-link" id="learn-back-2">← Zurück</button>
@@ -1308,7 +1318,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     const prevBest = bestScores[testDeckKey];
     const isNewBest = (prevBest === undefined) || (pct > prevBest);
     if(isNewBest){ bestScores[testDeckKey] = pct; await saveBestScores(); }
-    let emoji = pct === 100 ? '🦝🏆' : (pct >= 70 ? '🦝👍' : '🦝💪');
+    let emoji = pct === 100 ? '🐴🏆' : (pct >= 70 ? '🐴👍' : '🐴💪');
 
     const reviewHtml = testAnswers.map(a => `
       <div class="review-item ${a.isCorrect ? 'correct' : 'wrong'}">
@@ -1411,7 +1421,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     play.innerHTML = `
       <button class="back-link" id="match-back-2">← Zurück</button>
       <div class="game-done">
-        <div class="emoji">🦝✨</div>
+        <div class="emoji">🐴✨</div>
         <div class="score">${matchSeconds}s</div>
         <div class="score-label">für ${matchTotalPairs} Paare</div>
         ${isNewBest ? '<div class="best-badge">🏆 Neue Bestzeit!</div>' : `<div class="best-badge">Bestzeit: ${prevBest}s</div>`}
@@ -1436,7 +1446,17 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
       renderPracticeDeckList();
     }
   }
-  document.querySelectorAll('nav.tabs button').forEach(b=> b.addEventListener('click', ()=> switchTab(b.dataset.tab)));
+  // Der Verwalten-Bereich ist PIN-geschuetzt. Einmal pro Sitzung entsperren,
+  // damit nicht bei jedem Tabwechsel neu gefragt wird.
+  let manageUnlocked = false;
+  document.querySelectorAll('nav.tabs button').forEach(b=> b.addEventListener('click', async ()=>{
+    if(b.dataset.tab === 'manage' && !manageUnlocked){
+      const ok = await requirePin();
+      if(!ok) return;
+      manageUnlocked = true;
+    }
+    switchTab(b.dataset.tab);
+  }));
   document.getElementById('start-learn-btn').addEventListener('click', startReview);
 
   // ============ Import ============
@@ -1474,7 +1494,9 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     if(/iPad/.test(ua)) return 'iPad';
     if(/iPhone/.test(ua)) return 'iPhone';
     if(/Android/.test(ua)) return 'Android-Gerät';
-    if(/Macintosh/.test(ua)) return 'Mac';
+    // iPadOS gibt sich in Safari als Macintosh aus; ein Mac hat keine
+    // Mehrfingereingabe, ein iPad schon.
+    if(/Macintosh/.test(ua)) return (navigator.maxTouchPoints > 1) ? 'iPad' : 'Mac';
     return 'PC';
   }
 
@@ -2096,6 +2118,46 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
   });
 
   document.querySelector('nav.tabs button[data-tab="manage"]').addEventListener('click', renderSyncInfo);
+
+  // ============ Zuruecksetzen ============
+  function resetMsg(text){
+    const el = document.getElementById('reset-msg');
+    el.textContent = text;
+    el.className = 'msg ok';
+  }
+
+  document.getElementById('reset-stars-btn').addEventListener('click', async ()=>{
+    if(!confirm('Sternenkonto auf 0 setzen und den gesamten Verlauf löschen?\n\nDie Vokabeln und der Lernfortschritt bleiben erhalten.')) return;
+    stars = { balance: 0, log: [] };
+    await saveStars();
+    renderStarStats();
+    renderStarLog();
+    renderOverview();
+    resetMsg('Sternenkonto und Verlauf zurückgesetzt.');
+  });
+
+  document.getElementById('reset-progress-btn').addEventListener('click', async ()=>{
+    if(!confirm('Lernfortschritt zurücksetzen?\n\nAlle Vokabeln werden wieder auf Box 0 gestellt und sind ab heute fällig. Streak, Tages-Herausforderung und Bestzeiten werden geleert.\n\nDie Vokabeln selbst und das Sternenkonto bleiben erhalten.')) return;
+    for(const unit of Object.keys(decks)){
+      for(const card of decks[unit]){
+        card.box = 0;
+        card.due = todayStr();
+      }
+    }
+    bestScores = {};
+    streakData = { practiceDates: [], lastMilestone: 0 };
+    dailyData = { lastCompletedDate: null, lastScore: null };
+    await saveDecks();
+    await saveBestScores();
+    await saveStreak();
+    await saveDaily();
+    renderOverview();
+    renderManage();
+    renderPracticeDeckList();
+    renderDailyChallengeCard();
+    renderStreakStat();
+    resetMsg('Lernfortschritt, Streak und Bestzeiten zurückgesetzt.');
+  });
 
   // ============ Init ============
   if('speechSynthesis' in window){
