@@ -153,6 +153,10 @@
   .hint-box{background:var(--sun-light);border:1px solid #f0dcae;color:#8a6314;font-size:0.78rem;padding:10px 12px;border-radius:10px;margin-bottom:14px;line-height:1.45;}
   .manage-block{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
   .manage-block h3{margin:0 0 10px;font-size:0.95rem;color:var(--navy);}
+  .cloud-status{font-size:0.8rem;border-radius:10px;padding:10px 12px;margin-bottom:10px;line-height:1.45;border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);}
+  .cloud-status.on{background:var(--mint-light);border-color:#bde9d3;color:#1c7a54;}
+  .cloud-status.off{background:var(--sun-light);border-color:#f0dcae;color:#8a6314;}
+  .cloud-status b{color:inherit;}
   .sync-status{font-size:0.8rem;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:4px;line-height:1.4;}
   label.check-row{display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--navy);font-weight:600;margin-top:10px;}
   label.check-row input{width:auto;margin:0;}
@@ -318,7 +322,29 @@
     </div>
 
     <div class="manage-block">
-      <h3>Geräteabgleich</h3>
+      <h3>Automatischer Abgleich</h3>
+      <div class="cloud-status" id="cloud-status">Wird geprüft …</div>
+
+      <div id="cloud-login">
+        <div class="hint-box">
+          Einmal pro Gerät anmelden. Danach werden Vokabeln, Lernfortschritt und Sterne automatisch zwischen den Geräten abgeglichen.
+        </div>
+        <label class="field-label">Benutzername</label>
+        <input type="text" id="cloud-email" autocomplete="username" value="vokabeln@lokal.invalid">
+        <label class="field-label">Passwort</label>
+        <input type="password" id="cloud-password" autocomplete="current-password" placeholder="Passwort">
+        <button class="primary-btn sky" id="cloud-login-btn">Anmelden</button>
+      </div>
+
+      <div id="cloud-actions" style="display:none;">
+        <button class="primary-btn sky" id="cloud-sync-btn">Jetzt abgleichen</button>
+        <button class="secondary-btn" id="cloud-logout-btn">Abmelden</button>
+      </div>
+      <div class="msg" id="cloud-msg"></div>
+    </div>
+
+    <div class="manage-block">
+      <h3>Geräteabgleich von Hand</h3>
 
       <label class="field-label">Units an ein anderes Gerät schicken</label>
       <div class="hint-box">
@@ -1432,7 +1458,360 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     renderOverview(); renderManage(); renderPracticeDeckList();
   });
 
-  // ============ Geraeteabgleich: Units senden / Vollsicherung / Uebernehmen ============
+  // ============ Firebase-Abgleich (REST, ohne SDK) ============
+  const FB_API_KEY = 'AIzaSyD5W7oWPd7EHdxNKCh0KvzYfMcBOuABFfI';
+  const FB_DB_URL = 'https://vokabeltrainer-7b2f7-default-rtdb.europe-west1.firebasedatabase.app';
+  const AUTH_KEY = 'vokabeltrainer-auth-v1';
+  const SYNC_META_KEY = 'vokabeltrainer-syncmeta-v1';
+
+  let authData = null;      // {idToken, refreshToken, expiresAt, uid, email}
+  let syncMeta = { stamp: 0, lastSyncedStamp: 0, lastSyncAt: null, lastBackupAt: null };
+  let pushTimer = null;
+  let syncBusy = false;
+
+  function deviceLabel(){
+    const ua = navigator.userAgent || '';
+    if(/iPad/.test(ua)) return 'iPad';
+    if(/iPhone/.test(ua)) return 'iPhone';
+    if(/Android/.test(ua)) return 'Android-Gerät';
+    if(/Macintosh/.test(ua)) return 'Mac';
+    return 'PC';
+  }
+
+  function cloudMsg(text, kind){
+    const el = document.getElementById('cloud-msg');
+    if(!el) return;
+    el.textContent = text;
+    el.className = 'msg ' + (kind || 'ok');
+  }
+
+  async function saveAuth(){ try{ await Store.set(AUTH_KEY, JSON.stringify(authData), false); }catch(e){} }
+  async function saveSyncMeta(){ try{ await Store.set(SYNC_META_KEY, JSON.stringify(syncMeta), false); }catch(e){} }
+
+  async function loadAuthAndMeta(){
+    try{
+      const r = await Store.get(AUTH_KEY, false);
+      authData = (r && r.value) ? JSON.parse(r.value) : null;
+    }catch(e){ authData = null; }
+    try{
+      const r2 = await Store.get(SYNC_META_KEY, false);
+      if(r2 && r2.value) syncMeta = Object.assign(syncMeta, JSON.parse(r2.value));
+    }catch(e){}
+    if(!syncMeta.lastBackupAt && settings && settings.lastBackupAt){
+      syncMeta.lastBackupAt = settings.lastBackupAt;
+    }
+  }
+
+  // ---- Anmeldung ----
+  async function fbSignIn(email, password){
+    const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + FB_API_KEY, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: email, password: password, returnSecureToken: true})
+    });
+    const data = await res.json();
+    if(!res.ok){
+      const code = (data && data.error && data.error.message) || 'UNBEKANNT';
+      throw new Error(code);
+    }
+    authData = {
+      idToken: data.idToken,
+      refreshToken: data.refreshToken,
+      expiresAt: Date.now() + (parseInt(data.expiresIn, 10) * 1000),
+      uid: data.localId,
+      email: data.email
+    };
+    await saveAuth();
+  }
+
+  async function fbRefresh(){
+    if(!authData || !authData.refreshToken) throw new Error('NO_REFRESH_TOKEN');
+    const body = 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(authData.refreshToken);
+    const res = await fetch('https://securetoken.googleapis.com/v1/token?key=' + FB_API_KEY, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: body
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error('REFRESH_FAILED');
+    authData.idToken = data.id_token;
+    authData.refreshToken = data.refresh_token || authData.refreshToken;
+    authData.expiresAt = Date.now() + (parseInt(data.expires_in, 10) * 1000);
+    await saveAuth();
+  }
+
+  async function fbToken(){
+    if(!authData) throw new Error('NOT_SIGNED_IN');
+    if(!authData.expiresAt || authData.expiresAt - Date.now() < 300000){
+      await fbRefresh();
+    }
+    return authData.idToken;
+  }
+
+  // ---- Datenbank ----
+  function statePath(){ return FB_DB_URL + '/users/' + authData.uid + '/state.json'; }
+
+  async function cloudGet(){
+    const token = await fbToken();
+    const res = await fetch(statePath() + '?auth=' + encodeURIComponent(token));
+    if(!res.ok) throw new Error('GET_FAILED_' + res.status);
+    return await res.json();
+  }
+
+  async function cloudPut(payload){
+    const token = await fbToken();
+    const res = await fetch(statePath() + '?auth=' + encodeURIComponent(token), {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error('PUT_FAILED_' + res.status);
+    return true;
+  }
+
+  function buildCloudPayload(){
+    const st = Object.assign({}, settings);
+    delete st.lastBackupAt;
+    return {
+      updatedAt: syncMeta.stamp || Date.now(),
+      device: deviceLabel(),
+      decks: decks,
+      bestScores: bestScores,
+      settings: st,
+      stars: stars,
+      streak: streakData,
+      daily: dailyData,
+      pin: pinData
+    };
+  }
+
+  async function applyCloudPayload(remote){
+    if(remote.decks) decks = remote.decks;
+    if(remote.bestScores) bestScores = remote.bestScores;
+    if(remote.settings){
+      const keepBackup = settings ? settings.lastBackupAt : null;
+      settings = remote.settings;
+      if(keepBackup) settings.lastBackupAt = keepBackup;
+    }
+    if(remote.stars) stars = remote.stars;
+    if(remote.streak) streakData = remote.streak;
+    if(remote.daily) dailyData = remote.daily;
+    if(remote.pin) pinData = remote.pin;
+
+    await origSaveDecks();
+    await origSaveBestScores();
+    await origSaveSettings();
+    await origSaveStars();
+    await origSaveStreak();
+    await origSaveDaily();
+    await savePin();
+
+    syncMeta.stamp = remote.updatedAt || Date.now();
+    syncMeta.lastSyncedStamp = syncMeta.stamp;
+    syncMeta.lastSyncAt = Date.now();
+    await saveSyncMeta();
+
+    setSegActive('global-direction-seg', settings.globalDirection || 'en-de');
+    renderOverview();
+    renderManage();
+    renderPracticeDeckList();
+    renderStarLog();
+    renderDailyChallengeCard();
+    renderSyncInfo();
+  }
+
+  async function cloudPush(){
+    if(!authData) return false;
+    await cloudPut(buildCloudPayload());
+    syncMeta.lastSyncedStamp = syncMeta.stamp;
+    syncMeta.lastSyncAt = Date.now();
+    await saveSyncMeta();
+    renderCloudStatus();
+    return true;
+  }
+
+  // Abgleich: neuerer Stand gewinnt. Sind beide Seiten seit dem letzten
+  // Abgleich veraendert worden, wird nachgefragt.
+  async function cloudSync(interactive){
+    if(!authData || syncBusy) return;
+    syncBusy = true;
+    try{
+      const remote = await cloudGet();
+      if(!remote || !remote.updatedAt){
+        await cloudPush();
+        if(interactive) cloudMsg('Stand in die Cloud übertragen.', 'ok');
+        return;
+      }
+      // Erstanmeldung auf diesem Geraet: nie blind den lokalen Stand
+      // durchsetzen – beim ersten Oeffnen legt der Trainer die Standard-Unit
+      // an, das wuerde sonst als "neuer" gelten und die Cloud ueberschreiben.
+      if(!syncMeta.lastSyncedStamp){
+        const rDecks = remote.decks || {};
+        const rCards = Object.keys(rDecks).reduce((n,k)=> n + (rDecks[k] ? rDecks[k].length : 0), 0);
+        const rStars = (remote.stars && remote.stars.balance) || 0;
+        const takeCloud = confirm(
+          'Dieses Gerät wird zum ersten Mal angeschlossen.\n\n' +
+          'In der Cloud (' + (remote.device || 'anderes Gerät') + ', ' + new Date(remote.updatedAt).toLocaleString('de-DE') + '):\n' +
+          rCards + ' Vokabeln, ' + rStars + ' Sterne\n\n' +
+          'Auf diesem Gerät:\n' + allCards().length + ' Vokabeln, ' + stars.balance + ' Sterne\n\n' +
+          'OK = Stand aus der Cloud übernehmen\n' +
+          'Abbrechen = Stand dieses Geräts hochladen und die Cloud ersetzen'
+        );
+        if(takeCloud){
+          await applyCloudPayload(remote);
+          cloudMsg('Stand von ' + (remote.device || 'anderem Gerät') + ' übernommen.', 'ok');
+        } else {
+          await cloudPush();
+          cloudMsg('Stand dieses Geräts hochgeladen.', 'ok');
+        }
+        return;
+      }
+
+      const localNewer = (syncMeta.stamp || 0) > (remote.updatedAt || 0);
+      const localUnsynced = (syncMeta.stamp || 0) > (syncMeta.lastSyncedStamp || 0);
+
+      if(localNewer){
+        await cloudPush();
+        if(interactive) cloudMsg('Dieses Gerät war neuer – Stand hochgeladen.', 'ok');
+        return;
+      }
+      if((remote.updatedAt || 0) === (syncMeta.stamp || 0)){
+        syncMeta.lastSyncedStamp = syncMeta.stamp;
+        syncMeta.lastSyncAt = Date.now();
+        await saveSyncMeta();
+        renderCloudStatus();
+        if(interactive) cloudMsg('Alles auf dem gleichen Stand.', 'ok');
+        return;
+      }
+      // Cloud ist neuer
+      if(localUnsynced){
+        const ok = confirm(
+          'Auf einem anderen Gerät wurde später geübt.\n\n' +
+          'Cloud (' + (remote.device || 'anderes Gerät') + '): ' + new Date(remote.updatedAt).toLocaleString('de-DE') + '\n' +
+          'Dieses Gerät: ' + new Date(syncMeta.stamp).toLocaleString('de-DE') + '\n\n' +
+          'Den Stand aus der Cloud übernehmen? Die Änderungen auf diesem Gerät gehen dabei verloren.'
+        );
+        if(!ok){
+          if(interactive) cloudMsg('Abgleich abgebrochen.', 'err');
+          return;
+        }
+      }
+      await applyCloudPayload(remote);
+      cloudMsg('Stand von ' + (remote.device || 'anderem Gerät') + ' übernommen.', 'ok');
+    }catch(e){
+      if(interactive) cloudMsg('Abgleich fehlgeschlagen: ' + e.message, 'err');
+    }finally{
+      syncBusy = false;
+      renderCloudStatus();
+    }
+  }
+
+  function schedulePush(){
+    if(!authData) return;
+    if(pushTimer) clearTimeout(pushTimer);
+    pushTimer = setTimeout(()=>{
+      pushTimer = null;
+      cloudPush().catch(()=>{});
+    }, 2500);
+  }
+
+  async function touch(){
+    syncMeta.stamp = Date.now();
+    await saveSyncMeta();
+    schedulePush();
+  }
+
+  // Jede Speicheraktion markiert den Stand als geaendert und loest den
+  // verzoegerten Upload aus. Die Originalfunktionen bleiben fuer den
+  // Cloud-Import erhalten, damit dieser keinen Upload zurueckschreibt.
+  const origSaveDecks = saveDecks;
+  const origSaveBestScores = saveBestScores;
+  const origSaveSettings = saveSettings;
+  const origSaveStars = saveStars;
+  const origSaveStreak = saveStreak;
+  const origSaveDaily = saveDaily;
+
+  saveDecks = async function(){ await origSaveDecks(); await touch(); };
+  saveBestScores = async function(){ await origSaveBestScores(); await touch(); };
+  saveSettings = async function(){ await origSaveSettings(); await touch(); };
+  saveStars = async function(){ await origSaveStars(); await touch(); };
+  saveStreak = async function(){ await origSaveStreak(); await touch(); };
+  saveDaily = async function(){ await origSaveDaily(); await touch(); };
+
+  function renderCloudStatus(){
+    const el = document.getElementById('cloud-status');
+    const loginBox = document.getElementById('cloud-login');
+    const actionBox = document.getElementById('cloud-actions');
+    if(!el) return;
+    if(authData && authData.uid){
+      const last = syncMeta.lastSyncAt ? new Date(syncMeta.lastSyncAt).toLocaleString('de-DE') : 'noch nicht';
+      const offen = (syncMeta.stamp || 0) > (syncMeta.lastSyncedStamp || 0);
+      el.className = 'cloud-status on';
+      el.innerHTML = 'Abgleich aktiv auf diesem Gerät (<b>' + deviceLabel() + '</b>).<br>' +
+        'Letzter Abgleich: ' + last + (offen ? '<br>Es gibt noch nicht übertragene Änderungen.' : '');
+      loginBox.style.display = 'none';
+      actionBox.style.display = 'block';
+    } else {
+      el.className = 'cloud-status off';
+      el.textContent = 'Nicht angemeldet – dieses Gerät gleicht sich nicht ab.';
+      loginBox.style.display = 'block';
+      actionBox.style.display = 'none';
+    }
+  }
+
+  document.getElementById('cloud-login-btn').addEventListener('click', async ()=>{
+    const email = document.getElementById('cloud-email').value.trim();
+    const pw = document.getElementById('cloud-password').value;
+    if(!email || !pw){ cloudMsg('Benutzername und Passwort eingeben.', 'err'); return; }
+    cloudMsg('Anmeldung läuft …', 'ok');
+    try{
+      await fbSignIn(email, pw);
+      document.getElementById('cloud-password').value = '';
+      renderCloudStatus();
+      cloudMsg('Angemeldet. Abgleich läuft …', 'ok');
+      await cloudSync(true);
+    }catch(e){
+      let t = 'Anmeldung fehlgeschlagen: ' + e.message;
+      if(/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND/.test(e.message)) t = 'Benutzername oder Passwort falsch.';
+      if(/TOO_MANY_ATTEMPTS/.test(e.message)) t = 'Zu viele Versuche. Später erneut probieren.';
+      if(/Failed to fetch|NetworkError|Load failed/i.test(e.message)) t = 'Keine Verbindung zum Server. Netz oder Web-Filter prüfen.';
+      cloudMsg(t, 'err');
+    }
+  });
+
+  document.getElementById('cloud-sync-btn').addEventListener('click', ()=> cloudSync(true));
+
+  document.getElementById('cloud-logout-btn').addEventListener('click', async ()=>{
+    if(pinData.pin){
+      const ok = await requirePin();
+      if(!ok) return;
+    }
+    if(!confirm('Abgleich auf diesem Gerät beenden? Der Stand bleibt lokal erhalten.')) return;
+    authData = null;
+    try{ await Store.set(AUTH_KEY, JSON.stringify(null), false); }catch(e){}
+    renderCloudStatus();
+    cloudMsg('Abgemeldet.', 'ok');
+  });
+
+  async function cloudInitialSync(){
+    await loadAuthAndMeta();
+    renderCloudStatus();
+    if(authData) await cloudSync(false);
+  }
+
+  // Bei Rueckkehr auf die Seite pruefen, ob ein anderes Geraet neuer ist,
+  // und offene Aenderungen vor dem Verlassen wegschreiben.
+  document.addEventListener('visibilitychange', ()=>{
+    if(!authData) return;
+    if(document.visibilityState === 'visible'){
+      cloudSync(false);
+    } else {
+      if(pushTimer){ clearTimeout(pushTimer); pushTimer = null; }
+      if((syncMeta.stamp || 0) > (syncMeta.lastSyncedStamp || 0)) cloudPush().catch(()=>{});
+    }
+  });
+
+  // ============ Geraeteabgleich von Hand: Units senden / Vollsicherung / Uebernehmen ============
   const SYNC_FORMAT = 'vokabeltrainer-sync';
   const UNITS_FORMAT = 'vokabeltrainer-units';
   const SYNC_VERSION = 1;
@@ -1451,8 +1830,8 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     nameInput.value = settings.syncShortcutName || DEFAULT_SHORTCUT_NAME;
     autoBox.checked = settings.syncAutoShortcut !== false;
     const st = document.getElementById('sync-status');
-    if(settings.lastBackupAt){
-      const d = new Date(settings.lastBackupAt);
+    if(syncMeta.lastBackupAt){
+      const d = new Date(syncMeta.lastBackupAt);
       st.textContent = 'Zuletzt auf diesem Gerät gesichert: ' + d.toLocaleString('de-DE');
     } else {
       st.textContent = 'Auf diesem Gerät noch nicht gesichert.';
@@ -1570,8 +1949,8 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     document.getElementById('sync-text').value = snapshot;
     const copied = await copyToClipboard(snapshot);
 
-    settings.lastBackupAt = new Date().toISOString();
-    await saveSettings();
+    syncMeta.lastBackupAt = new Date().toISOString();
+    await saveSyncMeta();
     renderSyncInfo();
 
     if(!copied){
@@ -1724,7 +2103,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     window.speechSynthesis.onvoiceschanged = populateVoiceList;
   }
   loadVoicePref().then(()=>{ if('speechSynthesis' in window) populateVoiceList(); });
-  loadAll();
+  loadAll().then(cloudInitialSync);
 })();
 </script>
 </body>
