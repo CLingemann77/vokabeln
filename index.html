@@ -164,6 +164,13 @@
   .deck-manage-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:0.85rem;}
   .deck-manage-row:last-child{border-bottom:none;}
   .del-btn{border:none;background:none;color:var(--coral);font-size:0.78rem;font-weight:800;cursor:pointer;}
+  .unit-actions{display:flex;gap:12px;align-items:center;flex-shrink:0;}
+  .mini-btn{border:none;background:none;color:var(--sky);font-size:0.78rem;font-weight:800;cursor:pointer;padding:0;}
+  .unit-edit-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);}
+  .unit-edit-row input[type=text]{font-size:0.85rem;padding:8px 10px;margin-bottom:6px;}
+  .unit-edit-row input[type=text].last{margin-bottom:0;}
+  .unit-edit-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+  .unit-edit-head .name{font-size:0.95rem;font-weight:800;color:var(--navy);}
   .loading{text-align:center;color:var(--ink-soft);padding:30px;font-size:0.85rem;}
   select.plain{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:0.9rem;background:var(--paper);}
 
@@ -820,8 +827,16 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     renderDailyChallengeCard();
   }
 
+  let editingUnit = null;
+  let unitFilter = '';
+
   function renderManage(){
     const listEl = document.getElementById('deck-manage-list');
+    if(editingUnit && decks[editingUnit]){
+      renderUnitEditor(listEl);
+      return;
+    }
+    editingUnit = null;
     listEl.innerHTML = '';
     const unitNames = Object.keys(decks);
     if(unitNames.length === 0){
@@ -832,17 +847,167 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
       const row = document.createElement('div');
       row.className = 'deck-manage-row';
       row.innerHTML = `<span>${escapeHtml(unit)} <span style="color:var(--ink-soft);">(${decks[unit].length})</span></span>`;
-      const btn = document.createElement('button');
-      btn.className = 'del-btn'; btn.textContent = 'Löschen';
-      btn.onclick = async () => {
-        if(confirm(`"${unit}" wirklich löschen?`)){
+
+      const actions = document.createElement('div');
+      actions.className = 'unit-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'mini-btn'; editBtn.textContent = 'Bearbeiten';
+      editBtn.onclick = () => { editingUnit = unit; unitFilter = ''; renderManage(); };
+
+      const renameBtn = document.createElement('button');
+      renameBtn.className = 'mini-btn'; renameBtn.textContent = 'Umbenennen';
+      renameBtn.onclick = () => renameUnit(unit);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'del-btn'; delBtn.textContent = 'Löschen';
+      delBtn.onclick = async () => {
+        if(confirm(`"${unit}" mit ${decks[unit].length} Vokabeln wirklich löschen?`)){
           delete decks[unit]; await saveDecks();
           renderOverview(); renderManage(); renderPracticeDeckList();
         }
       };
-      row.appendChild(btn);
+
+      actions.appendChild(editBtn);
+      actions.appendChild(renameBtn);
+      actions.appendChild(delBtn);
+      row.appendChild(actions);
       listEl.appendChild(row);
     }
+  }
+
+  async function renameUnit(unit){
+    const neu = prompt('Neuer Name für die Unit:', unit);
+    if(neu === null) return;
+    const name = neu.trim();
+    if(!name || name === unit) return;
+
+    if(decks[name]){
+      if(!confirm(`"${name}" existiert schon. Die Vokabeln aus "${unit}" dorthin verschieben?\n\nBereits vorhandene Vokabeln werden übersprungen, der Lernfortschritt bleibt erhalten.`)) return;
+      const known = new Set(decks[name].map(c => (String(c.en).trim().toLowerCase() + '|' + String(c.de).trim().toLowerCase())));
+      for(const card of decks[unit]){
+        const key = String(card.en).trim().toLowerCase() + '|' + String(card.de).trim().toLowerCase();
+        if(known.has(key)) continue;
+        known.add(key);
+        decks[name].push(card);
+      }
+      delete decks[unit];
+    } else {
+      // Reihenfolge der Units beibehalten
+      const rebuilt = {};
+      for(const key of Object.keys(decks)){
+        if(key === unit) rebuilt[name] = decks[unit];
+        else rebuilt[key] = decks[key];
+      }
+      decks = rebuilt;
+    }
+    await saveDecks();
+    if(editingUnit === unit) editingUnit = decks[name] ? name : null;
+    renderOverview(); renderManage(); renderPracticeDeckList();
+  }
+
+  function renderUnitEditor(listEl){
+    const unit = editingUnit;
+    const cards = decks[unit];
+    const filter = unitFilter.trim().toLowerCase();
+    const shown = filter
+      ? cards.filter(c => (c.en + ' ' + c.de).toLowerCase().includes(filter))
+      : cards;
+
+    listEl.innerHTML = `
+      <button class="back-link" id="unit-edit-back">← Alle Units</button>
+      <div class="unit-edit-head">
+        <span class="name">${escapeHtml(unit)} <span style="color:var(--ink-soft);font-weight:600;">(${cards.length})</span></span>
+        <button class="mini-btn" id="unit-edit-rename">Umbenennen</button>
+      </div>
+      <input type="text" id="unit-edit-filter" placeholder="Vokabel suchen" value="${escapeHtml(unitFilter)}">
+      <div id="unit-edit-list"></div>
+      <div class="hint-box" style="margin-top:14px;margin-bottom:8px;">
+        Änderungen greifen sofort und gehen über den Abgleich auf die anderen Geräte. Korrigierter Text lässt den Lernfortschritt der Vokabel unberührt.
+      </div>
+      <label class="field-label">Vokabel nachtragen</label>
+      <input type="text" id="unit-add-en" placeholder="Englisch">
+      <input type="text" id="unit-add-de" placeholder="Deutsch">
+      <button class="primary-btn sky" id="unit-add-btn" style="margin-top:8px;">Hinzufügen</button>
+      <div class="msg" id="unit-edit-msg"></div>
+    `;
+
+    const rows = document.getElementById('unit-edit-list');
+    if(shown.length === 0){
+      rows.innerHTML = '<div style="font-size:0.82rem;color:var(--ink-soft);padding:8px 0;">Keine Vokabel gefunden.</div>';
+    }
+    for(const card of shown){
+      const row = document.createElement('div');
+      row.className = 'unit-edit-row';
+      const fields = document.createElement('div');
+      fields.innerHTML =
+        `<input type="text" class="edit-en" value="${escapeHtml(card.en)}">` +
+        `<input type="text" class="edit-de last" value="${escapeHtml(card.de)}">`;
+      const del = document.createElement('button');
+      del.className = 'del-btn'; del.textContent = '✕';
+      del.title = 'Vokabel löschen';
+      del.onclick = async () => {
+        const idx = decks[unit].indexOf(card);
+        if(idx > -1) decks[unit].splice(idx, 1);
+        await saveDecks();
+        renderOverview(); renderManage(); renderPracticeDeckList();
+      };
+
+      const enInput = fields.querySelector('.edit-en');
+      const deInput = fields.querySelector('.edit-de');
+      enInput.addEventListener('change', async () => {
+        const v = enInput.value.trim();
+        if(!v){ enInput.value = card.en; return; }
+        card.en = v;
+        await saveDecks();
+      });
+      deInput.addEventListener('change', async () => {
+        const v = deInput.value.trim();
+        if(!v){ deInput.value = card.de; return; }
+        card.de = v;
+        await saveDecks();
+      });
+
+      row.appendChild(fields);
+      row.appendChild(del);
+      rows.appendChild(row);
+    }
+
+    document.getElementById('unit-edit-back').onclick = () => { editingUnit = null; unitFilter = ''; renderManage(); };
+    document.getElementById('unit-edit-rename').onclick = () => renameUnit(unit);
+
+    const filterInput = document.getElementById('unit-edit-filter');
+    filterInput.addEventListener('input', () => {
+      unitFilter = filterInput.value;
+      renderManage();
+      const again = document.getElementById('unit-edit-filter');
+      again.focus();
+      again.setSelectionRange(again.value.length, again.value.length);
+    });
+
+    document.getElementById('unit-add-btn').onclick = async () => {
+      const en = document.getElementById('unit-add-en').value.trim();
+      const de = document.getElementById('unit-add-de').value.trim();
+      const msg = document.getElementById('unit-edit-msg');
+      if(!en || !de){
+        msg.textContent = 'Englisch und Deutsch ausfüllen.';
+        msg.className = 'msg err';
+        return;
+      }
+      const key = en.toLowerCase() + '|' + de.toLowerCase();
+      if(decks[unit].some(c => (String(c.en).trim().toLowerCase() + '|' + String(c.de).trim().toLowerCase()) === key)){
+        msg.textContent = 'Diese Vokabel steht schon in der Unit.';
+        msg.className = 'msg err';
+        return;
+      }
+      decks[unit].push({
+        id: 'c' + Date.now() + Math.random().toString(36).slice(2,6),
+        en: en, de: de, box: 0, due: todayStr()
+      });
+      await saveDecks();
+      unitFilter = '';
+      renderOverview(); renderManage(); renderPracticeDeckList();
+    };
   }
 
   // ============ Wiederholen (Spaced Repetition) ============
@@ -1417,7 +1582,8 @@ student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]
     document.querySelectorAll('nav.tabs button').forEach(b=> b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.panel').forEach(p=> p.classList.toggle('active', p.id === 'panel-' + tab));
     if(tab === 'overview') renderOverview();
-    if(tab === 'manage') renderManage();
+    if(tab === 'manage'){ renderManage(); }
+    else { editingUnit = null; unitFilter = ''; }
     if(tab === 'practice'){
       if(matchTimer){ clearInterval(matchTimer); matchTimer = null; }
       document.getElementById('practice-deckselect').style.display = 'block';
