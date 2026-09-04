@@ -362,7 +362,7 @@
 
     <div class="manage-block">
       <h3>Neue Unit hinzufügen</h3>
-      <div class="hint-box">Format pro Zeile: <b>Englisch;Deutsch</b><br>Beispiel: <code>raccoon;der Waschbär</code><br>Eine Lautschrift in eckigen Klammern am Zeilenende wird ignoriert.</div>
+      <div class="hint-box">Format pro Zeile: <b>Englisch;Deutsch</b><br>Beispiel: <code>horse;das Pferd</code><br>Eine Lautschrift in eckigen Klammern am Zeilenende wird ignoriert.</div>
       <label class="field-label">Name der Unit</label>
       <input type="text" id="unit-name" placeholder="z. B. Unit 2">
       <label class="field-label">Vokabeln</label>
@@ -429,38 +429,38 @@
 
   const DEFAULT_DECKS = {
     "Unit 1": parseImport(
-`Hi.;Hi.; Hallo. [haɪ]
-I'm (= I am);ich bin [aɪm]
-the;der; die (auch Pl.); das [ðə]
-raccoon;der Waschbär [rəˈkuːn]
-my;mein / meine [maɪ]
-favourite;Lieblings- [ˈfeɪvrɪt]
-colour;die Farbe [ˈkʌlə]
-is;ist [ɪz]
-what's (= what is);was ist [wɒts]
-your;dein / deine; euer / eure; Ihr / Ihre [jɔː]
-My name is …;Ich heiße … [maɪ ˈneɪm ɪz]
-What's your name?;Wie heißt du? [wɒts jə ˈneɪm]
-Nice to meet you.;Schön, dich kennenzulernen. [ˌnaɪs tə ˈmiːt juː]
-How are you?;Wie geht es dir? [ˌhaʊ ˈɑː jə]
-great;gut; toll; großartig; groß; riesig [greɪt]
-See you later.;Tschüss.; Bis bald. [ˌsiː jə ˈleɪtə]
-Bye.;Tschüss. [baɪ]
-to say;sagen; sprechen [seɪ]
-Hello.;Hallo. [həˈləʊ]
-Goodbye.;Auf Wiedersehen. [gʊdˈbaɪ]
-What are your names?;Wie heißt ihr? [ˌwɒt ɑː jə ˈneɪmz]
-and;und [ænd]
-this;das; dies [ðɪs]
-too;auch; zu [tuː]
-pardon;Entschuldigung [ˈpɑːdn]
-Can you spell that?;Kannst du das buchstabieren? [kæn juː ˈspel ðæt]
-please;bitte [pliːz]
-Thank you.;Danke. [ˈθæŋk juː]
-How old are you?;Wie alt bist du? [ˌhaʊ ˈəʊld ə juː]
-Where are you from?;Woher kommst du? [ˌweər ə juː ˈfrɒm]
-I'm from …;Ich komme aus … [aɪm ˈfrɒm]
-student;der Schüler / die Schülerin; der Student / die Studentin [ˈstjuːdnt]`)
+`Hi.;Hi.; Hallo.
+I'm (= I am);ich bin
+the;der; die (auch Pl.); das
+raccoon;der Waschbär
+my;mein / meine
+favourite;Lieblings-
+colour;die Farbe
+is;ist
+what's (= what is);was ist
+your;dein / deine; euer / eure; Ihr / Ihre
+My name is …;Ich heiße …
+What's your name?;Wie heißt du?
+Nice to meet you.;Schön, dich kennenzulernen.
+How are you?;Wie geht es dir?
+great;gut; toll; großartig; groß; riesig
+See you later.;Tschüss.; Bis bald.
+Bye.;Tschüss.
+to say;sagen; sprechen
+Hello.;Hallo.
+Goodbye.;Auf Wiedersehen.
+What are your names?;Wie heißt ihr?
+and;und
+this;das; dies
+too;auch; zu
+pardon;Entschuldigung
+Can you spell that?;Kannst du das buchstabieren?
+please;bitte
+Thank you.;Danke.
+How old are you?;Wie alt bist du?
+Where are you from?;Woher kommst du?
+I'm from …;Ich komme aus …
+student;der Schüler / die Schülerin; der Student / die Studentin`)
   };
 
   function parseImport(text){
