@@ -344,6 +344,11 @@
       <div id="cloud-actions" style="display:none;">
         <button class="primary-btn sky" id="cloud-sync-btn">Jetzt abgleichen</button>
         <button class="secondary-btn" id="cloud-logout-btn">Abmelden</button>
+        <label class="field-label" style="margin-top:14px;">Name dieses Geräts</label>
+        <input type="text" id="cloud-device-name" placeholder="z. B. iPad Amy">
+        <div class="hint-box" style="margin-top:4px;margin-bottom:0;">
+          Erscheint in den Abgleich-Meldungen der anderen Geräte. Bleibt auf diesem Gerät und wird nicht mit abgeglichen.
+        </div>
       </div>
       <div class="msg" id="cloud-msg"></div>
     </div>
@@ -829,6 +834,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
 
   let editingUnit = null;
   let unitFilter = '';
+  let unitEditMsg = null;   // {text, kind} – ueberlebt das Neuzeichnen des Editors
 
   function renderManage(){
     const listEl = document.getElementById('deck-manage-list');
@@ -925,10 +931,15 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       <div class="hint-box" style="margin-top:14px;margin-bottom:8px;">
         Änderungen greifen sofort und gehen über den Abgleich auf die anderen Geräte. Korrigierter Text lässt den Lernfortschritt der Vokabel unberührt.
       </div>
-      <label class="field-label">Vokabel nachtragen</label>
+      <label class="field-label">Einzelne Vokabel nachtragen</label>
       <input type="text" id="unit-add-en" placeholder="Englisch">
       <input type="text" id="unit-add-de" placeholder="Deutsch">
       <button class="primary-btn sky" id="unit-add-btn" style="margin-top:8px;">Hinzufügen</button>
+
+      <label class="field-label" style="margin-top:18px;">Mehrere auf einmal nachtragen</label>
+      <div class="hint-box">Eine Zeile je Vokabel im Format <b>Englisch;Deutsch</b>. Schon vorhandene Vokabeln werden übersprungen.</div>
+      <textarea id="unit-bulk-text" placeholder="Englisch;Deutsch&#10;Englisch;Deutsch" style="min-height:110px;"></textarea>
+      <button class="primary-btn sky" id="unit-bulk-btn" style="margin-top:8px;">Zeilen hinzufügen</button>
       <div class="msg" id="unit-edit-msg"></div>
     `;
 
@@ -973,7 +984,14 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       rows.appendChild(row);
     }
 
-    document.getElementById('unit-edit-back').onclick = () => { editingUnit = null; unitFilter = ''; renderManage(); };
+    if(unitEditMsg){
+      const m = document.getElementById('unit-edit-msg');
+      m.textContent = unitEditMsg.text;
+      m.className = 'msg ' + unitEditMsg.kind;
+      unitEditMsg = null;
+    }
+
+    document.getElementById('unit-edit-back').onclick = () => { editingUnit = null; unitFilter = ''; unitEditMsg = null; renderManage(); };
     document.getElementById('unit-edit-rename').onclick = () => renameUnit(unit);
 
     const filterInput = document.getElementById('unit-edit-filter');
@@ -1006,6 +1024,49 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       });
       await saveDecks();
       unitFilter = '';
+      unitEditMsg = { text: '"' + en + '" hinzugefügt.', kind: 'ok' };
+      renderOverview(); renderManage(); renderPracticeDeckList();
+    };
+
+    document.getElementById('unit-bulk-btn').onclick = async () => {
+      const raw = document.getElementById('unit-bulk-text').value;
+      const msg = document.getElementById('unit-edit-msg');
+      if(!raw.trim()){
+        msg.textContent = 'Keine Zeilen eingegeben.';
+        msg.className = 'msg err';
+        return;
+      }
+      const zeilen = raw.split('\n').filter(z => z.trim()).length;
+      const neue = parseImport(raw);
+      const unbrauchbar = zeilen - neue.length;
+
+      const known = new Set(decks[unit].map(c =>
+        String(c.en).trim().toLowerCase() + '|' + String(c.de).trim().toLowerCase()));
+      let hinzu = 0, doppelt = 0;
+      for(const c of neue){
+        const key = String(c.en).trim().toLowerCase() + '|' + String(c.de).trim().toLowerCase();
+        if(known.has(key)){ doppelt++; continue; }
+        known.add(key);
+        decks[unit].push(c);
+        hinzu++;
+      }
+
+      if(hinzu === 0){
+        msg.textContent = 'Nichts hinzugefügt' +
+          (doppelt ? ' – ' + doppelt + ' schon vorhanden' : '') +
+          (unbrauchbar ? ', ' + unbrauchbar + ' Zeile' + (unbrauchbar === 1 ? '' : 'n') + ' unbrauchbar' : '') + '.';
+        msg.className = 'msg err';
+        return;
+      }
+
+      await saveDecks();
+      unitFilter = '';
+      unitEditMsg = {
+        text: hinzu + ' Vokabel' + (hinzu === 1 ? '' : 'n') + ' hinzugefügt' +
+          (doppelt ? ', ' + doppelt + ' schon vorhanden' : '') +
+          (unbrauchbar ? ', ' + unbrauchbar + ' Zeile' + (unbrauchbar === 1 ? '' : 'n') + ' unbrauchbar' : '') + '.',
+        kind: 'ok'
+      };
       renderOverview(); renderManage(); renderPracticeDeckList();
     };
   }
@@ -1016,6 +1077,29 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     sessionTotal = queue.length;
     currentIdx = 0;
     switchTab('review');
+    renderReviewCard();
+  }
+
+  // Wird der Reiter direkt angetippt, statt ueber "Faellige wiederholen":
+  // laufende Sitzung fortsetzen, sonst neue starten oder erklaeren, dass
+  // nichts faellig ist. Vorher blieb die Seite in diesem Fall leer.
+  function enterReview(){
+    if(queue.length && currentIdx < queue.length){
+      renderReviewCard();
+      return;
+    }
+    const due = dueCards();
+    if(due.length === 0){
+      document.getElementById('progress-fill').style.width = '0%';
+      document.getElementById('learn-area').innerHTML =
+        `<div class="done-banner"><div class="emoji">🐴🎉</div><h3>Nichts fällig</h3>` +
+        `<div style="color:var(--ink-soft);font-size:0.88rem;">Für heute ist alles wiederholt. ` +
+        `Unter „Üben“ kannst du trotzdem weitermachen.</div></div>`;
+      return;
+    }
+    queue = shuffle(due);
+    sessionTotal = queue.length;
+    currentIdx = 0;
     renderReviewCard();
   }
 
@@ -1602,6 +1686,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       manageUnlocked = true;
     }
     switchTab(b.dataset.tab);
+    if(b.dataset.tab === 'review') enterReview();
   }));
   document.getElementById('start-learn-btn').addEventListener('click', startReview);
 
@@ -1635,7 +1720,35 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   let pushTimer = null;
   let syncBusy = false;
 
-  function deviceLabel(){
+  const FB_TIMEOUT_MS = 10000;
+
+  // Ohne Zeitlimit bleibt der Trainer bei einer haengenden Verbindung stumm
+  // im Zustand "Wird geprueft" stehen.
+  async function fbFetch(url, options){
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=> ctrl.abort(), FB_TIMEOUT_MS);
+    try{
+      return await fetch(url, Object.assign({}, options || {}, { signal: ctrl.signal }));
+    }catch(e){
+      if(e && e.name === 'AbortError') throw new Error('TIMEOUT');
+      throw e;
+    }finally{
+      clearTimeout(timer);
+    }
+  }
+
+  function fbErrorText(e){
+    const m = (e && e.message) || '';
+    if(m === 'TIMEOUT') return 'Zeitüberschreitung – der Server war nicht erreichbar. Netz oder Web-Filter prüfen.';
+    if(/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND/.test(m)) return 'Benutzername oder Passwort falsch.';
+    if(/TOO_MANY_ATTEMPTS/.test(m)) return 'Zu viele Versuche. Später erneut probieren.';
+    if(/REFRESH_FAILED|NO_REFRESH_TOKEN/.test(m)) return 'Die Anmeldung ist abgelaufen. Bitte neu anmelden.';
+    if(/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Keine Verbindung zum Server. Netz oder Web-Filter prüfen.';
+    if(/GET_FAILED|PUT_FAILED/.test(m)) return 'Der Server hat die Anfrage abgelehnt (' + m + ').';
+    return m || 'Unbekannter Fehler.';
+  }
+
+  function autoDeviceLabel(){
     const ua = navigator.userAgent || '';
     if(/iPad/.test(ua)) return 'iPad';
     if(/iPhone/.test(ua)) return 'iPhone';
@@ -1644,6 +1757,11 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     // Mehrfingereingabe, ein iPad schon.
     if(/Macintosh/.test(ua)) return (navigator.maxTouchPoints > 1) ? 'iPad' : 'Mac';
     return 'PC';
+  }
+
+  function deviceLabel(){
+    const own = (syncMeta && syncMeta.deviceName) ? String(syncMeta.deviceName).trim() : '';
+    return own || autoDeviceLabel();
   }
 
   function cloudMsg(text, kind){
@@ -1672,7 +1790,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
 
   // ---- Anmeldung ----
   async function fbSignIn(email, password){
-    const res = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + FB_API_KEY, {
+    const res = await fbFetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + FB_API_KEY, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({email: email, password: password, returnSecureToken: true})
@@ -1695,7 +1813,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   async function fbRefresh(){
     if(!authData || !authData.refreshToken) throw new Error('NO_REFRESH_TOKEN');
     const body = 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(authData.refreshToken);
-    const res = await fetch('https://securetoken.googleapis.com/v1/token?key=' + FB_API_KEY, {
+    const res = await fbFetch('https://securetoken.googleapis.com/v1/token?key=' + FB_API_KEY, {
       method: 'POST',
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
       body: body
@@ -1721,14 +1839,14 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
 
   async function cloudGet(){
     const token = await fbToken();
-    const res = await fetch(statePath() + '?auth=' + encodeURIComponent(token));
+    const res = await fbFetch(statePath() + '?auth=' + encodeURIComponent(token));
     if(!res.ok) throw new Error('GET_FAILED_' + res.status);
     return await res.json();
   }
 
   async function cloudPut(payload){
     const token = await fbToken();
-    const res = await fetch(statePath() + '?auth=' + encodeURIComponent(token), {
+    const res = await fbFetch(statePath() + '?auth=' + encodeURIComponent(token), {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
@@ -1867,7 +1985,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       await applyCloudPayload(remote);
       cloudMsg('Stand von ' + (remote.device || 'anderem Gerät') + ' übernommen.', 'ok');
     }catch(e){
-      if(interactive) cloudMsg('Abgleich fehlgeschlagen: ' + e.message, 'err');
+      if(interactive) cloudMsg('Abgleich fehlgeschlagen: ' + fbErrorText(e), 'err');
     }finally{
       syncBusy = false;
       renderCloudStatus();
@@ -1915,10 +2033,15 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       const last = syncMeta.lastSyncAt ? new Date(syncMeta.lastSyncAt).toLocaleString('de-DE') : 'noch nicht';
       const offen = (syncMeta.stamp || 0) > (syncMeta.lastSyncedStamp || 0);
       el.className = 'cloud-status on';
-      el.innerHTML = 'Abgleich aktiv auf diesem Gerät (<b>' + deviceLabel() + '</b>).<br>' +
+      el.innerHTML = 'Abgleich aktiv auf diesem Gerät (<b>' + escapeHtml(deviceLabel()) + '</b>).<br>' +
         'Letzter Abgleich: ' + last + (offen ? '<br>Es gibt noch nicht übertragene Änderungen.' : '');
       loginBox.style.display = 'none';
       actionBox.style.display = 'block';
+      const nameInput = document.getElementById('cloud-device-name');
+      if(document.activeElement !== nameInput){
+        nameInput.value = (syncMeta.deviceName || '');
+        nameInput.placeholder = autoDeviceLabel();
+      }
     } else {
       el.className = 'cloud-status off';
       el.textContent = 'Nicht angemeldet – dieses Gerät gleicht sich nicht ab.';
@@ -1939,15 +2062,18 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       cloudMsg('Angemeldet. Abgleich läuft …', 'ok');
       await cloudSync(true);
     }catch(e){
-      let t = 'Anmeldung fehlgeschlagen: ' + e.message;
-      if(/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND/.test(e.message)) t = 'Benutzername oder Passwort falsch.';
-      if(/TOO_MANY_ATTEMPTS/.test(e.message)) t = 'Zu viele Versuche. Später erneut probieren.';
-      if(/Failed to fetch|NetworkError|Load failed/i.test(e.message)) t = 'Keine Verbindung zum Server. Netz oder Web-Filter prüfen.';
-      cloudMsg(t, 'err');
+      cloudMsg('Anmeldung fehlgeschlagen: ' + fbErrorText(e), 'err');
     }
   });
 
   document.getElementById('cloud-sync-btn').addEventListener('click', ()=> cloudSync(true));
+
+  document.getElementById('cloud-device-name').addEventListener('change', async (e)=>{
+    syncMeta.deviceName = e.target.value.trim();
+    await saveSyncMeta();
+    renderCloudStatus();
+    if((syncMeta.stamp || 0) > 0) cloudPush().catch(()=>{});
+  });
 
   document.getElementById('cloud-logout-btn').addEventListener('click', async ()=>{
     if(pinData.pin){
@@ -1962,9 +2088,21 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   });
 
   async function cloudInitialSync(){
-    await loadAuthAndMeta();
+    try{
+      await loadAuthAndMeta();
+    }catch(e){
+      authData = null;
+    }
+    // Status immer zuerst anzeigen, damit die Oberflaeche nie im Zustand
+    // "Wird geprueft" haengen bleibt, falls der Abgleich scheitert.
     renderCloudStatus();
-    if(authData) await cloudSync(false);
+    if(!authData) return;
+    try{
+      await cloudSync(false);
+    }catch(e){
+      cloudMsg('Abgleich beim Start fehlgeschlagen: ' + fbErrorText(e), 'err');
+      renderCloudStatus();
+    }
   }
 
   // Bei Rueckkehr auf die Seite pruefen, ob ein anderes Geraet neuer ist,
@@ -2155,7 +2293,11 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     window.speechSynthesis.onvoiceschanged = populateVoiceList;
   }
   loadVoicePref().then(()=>{ if('speechSynthesis' in window) populateVoiceList(); });
-  loadAll().then(cloudInitialSync);
+  // Auch wenn beim Laden etwas schiefgeht, muss der Cloud-Status gesetzt werden.
+  loadAll()
+    .catch(err => { console.error('Fehler beim Laden:', err); })
+    .then(cloudInitialSync)
+    .catch(err => { console.error('Fehler beim Cloud-Start:', err); });
 })();
 </script>
 </body>
