@@ -153,6 +153,7 @@
   .hint-box{background:var(--sun-light);border:1px solid #f0dcae;color:#8a6314;font-size:0.78rem;padding:10px 12px;border-radius:10px;margin-bottom:14px;line-height:1.45;}
   .manage-block{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
   .manage-block h3{margin:0 0 10px;font-size:0.95rem;color:var(--navy);}
+  .app-version{text-align:center;font-size:0.72rem;color:var(--ink-soft);padding:14px 0 4px;}
   .cloud-status{font-size:0.8rem;border-radius:10px;padding:10px 12px;margin-bottom:10px;line-height:1.45;border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);}
   .cloud-status.on{background:var(--mint-light);border-color:#bde9d3;color:#1c7a54;}
   .cloud-status.off{background:var(--sun-light);border-color:#f0dcae;color:#8a6314;}
@@ -343,6 +344,8 @@
 
       <div id="cloud-actions" style="display:none;">
         <button class="primary-btn sky" id="cloud-sync-btn">Jetzt abgleichen</button>
+        <button class="secondary-btn" id="cloud-force-push-btn">Diesen Stand in die Cloud erzwingen</button>
+        <button class="secondary-btn" id="cloud-force-pull-btn">Cloud-Stand erzwingen</button>
         <button class="secondary-btn" id="cloud-logout-btn">Abmelden</button>
         <label class="field-label" style="margin-top:14px;">Name dieses Geräts</label>
         <input type="text" id="cloud-device-name" placeholder="z. B. iPad Amy">
@@ -390,6 +393,16 @@
       <h3>Vorhandene Units</h3>
       <div id="deck-manage-list"></div>
     </div>
+
+    <div class="manage-block">
+      <h3>Programm aktualisieren</h3>
+      <div class="hint-box">
+        Holt die neueste Fassung vom Server. Nötig, weil eine App vom Home-Bildschirm die alte Datei sonst hartnäckig behält. Lernstand, Sterne und Anmeldung bleiben erhalten.
+      </div>
+      <button class="secondary-btn" id="app-reload-btn" style="margin-top:0;">Neueste Version holen</button>
+    </div>
+
+    <div class="app-version" id="app-version"></div>
   </section>
 </div>
 
@@ -521,6 +534,37 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   let pinData = { pin: null };
   let queue = [], currentIdx = 0, sessionTotal = 0, flipped = false;
 
+  // Firebase speichert leere Listen nicht: aus `log: []` wird beim Hochladen
+  // nichts, und beim Herunterladen fehlt das Feld. Wer dann einen Stern vergibt,
+  // schreibt in eine Liste, die es nicht gibt – der Aufruf stuerzt ab und die
+  // Sterne gehen verloren. Deshalb wird jeder geladene Stand hier geradegezogen.
+  // Aus demselben Grund koennen Listen als Objekt mit Zahlenschluesseln
+  // zurueckkommen; auch das wird hier aufgefangen.
+  function toArray(v){
+    if(Array.isArray(v)) return v;
+    if(v && typeof v === 'object') return Object.keys(v).sort((a,b)=>a-b).map(k => v[k]);
+    return [];
+  }
+
+  function normalizeState(){
+    if(!stars || typeof stars !== 'object') stars = { balance: 0, log: [] };
+    stars.balance = Number(stars.balance) || 0;
+    stars.log = toArray(stars.log);
+
+    if(!streakData || typeof streakData !== 'object') streakData = { practiceDates: [], lastMilestone: 0 };
+    streakData.practiceDates = toArray(streakData.practiceDates);
+    streakData.lastMilestone = Number(streakData.lastMilestone) || 0;
+
+    if(!dailyData || typeof dailyData !== 'object') dailyData = { lastCompletedDate: null, lastScore: null };
+    if(!bestScores || typeof bestScores !== 'object') bestScores = {};
+    if(!pinData || typeof pinData !== 'object') pinData = { pin: null };
+
+    if(!decks || typeof decks !== 'object') decks = {};
+    for(const unit of Object.keys(decks)){
+      decks[unit] = toArray(decks[unit]).filter(c => c && c.en && c.de);
+    }
+  }
+
   async function loadAll(){
     try{
       const res = await Store.get(STORAGE_KEY, false);
@@ -558,6 +602,8 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       pinData = (res7 && res7.value) ? JSON.parse(res7.value) : { pin: null };
     }catch(e){ pinData = { pin: null }; }
 
+    normalizeState();
+    document.getElementById('app-version').textContent = 'Programmstand ' + APP_VERSION;
     document.getElementById('loading').style.display = 'none';
     setSegActive('global-direction-seg', settings.globalDirection);
     renderOverview();
@@ -1767,6 +1813,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   let pushTimer = null;
   let syncBusy = false;
 
+  const APP_VERSION = '2026-09-12 · 14';
   const FB_TIMEOUT_MS = 10000;
 
   // Ohne Zeitlimit bleibt der Trainer bei einer haengenden Verbindung stumm
@@ -1809,6 +1856,18 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   function deviceLabel(){
     const own = (syncMeta && syncMeta.deviceName) ? String(syncMeta.deviceName).trim() : '';
     return own || autoDeviceLabel();
+  }
+
+  async function recordSyncError(e){
+    syncMeta.lastError = { text: fbErrorText(e), at: Date.now() };
+    try{ await saveSyncMeta(); }catch(x){}
+    renderCloudStatus();
+  }
+
+  async function clearSyncError(){
+    if(!syncMeta.lastError) return;
+    delete syncMeta.lastError;
+    try{ await saveSyncMeta(); }catch(x){}
   }
 
   function cloudMsg(text, kind){
@@ -1944,6 +2003,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     if(remote.streak) streakData = remote.streak;
     if(remote.daily) dailyData = remote.daily;
     if(remote.pin) pinData = remote.pin;
+    normalizeState();
 
     await origSaveDecks();
     await origSaveBestScores();
@@ -1972,6 +2032,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     await cloudPut(buildCloudPayload(), keepalive);
     syncMeta.lastSyncedStamp = syncMeta.stamp;
     syncMeta.lastSyncAt = Date.now();
+    delete syncMeta.lastError;
     await saveSyncMeta();
     renderCloudStatus();
     return true;
@@ -2058,7 +2119,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     if(pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(()=>{
       pushTimer = null;
-      cloudPush().catch(()=>{});
+      cloudPush().catch(recordSyncError);
     }, 2500);
   }
 
@@ -2070,7 +2131,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     await saveSyncMeta();
     if(sofort){
       if(pushTimer){ clearTimeout(pushTimer); pushTimer = null; }
-      cloudPush().catch(()=> schedulePush());
+      cloudPush().catch(e => { recordSyncError(e); schedulePush(); });
       return;
     }
     schedulePush();
@@ -2102,8 +2163,12 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       const last = syncMeta.lastSyncAt ? new Date(syncMeta.lastSyncAt).toLocaleString('de-DE') : 'noch nicht';
       const offen = (syncMeta.stamp || 0) > (syncMeta.lastSyncedStamp || 0);
       el.className = 'cloud-status on';
+      const fehler = syncMeta.lastError
+        ? '<br><b style="color:var(--coral);">Letzter Upload fehlgeschlagen:</b> ' + escapeHtml(syncMeta.lastError.text) +
+          ' (' + new Date(syncMeta.lastError.at).toLocaleString('de-DE') + ')'
+        : '';
       el.innerHTML = 'Abgleich aktiv auf diesem Gerät (<b>' + escapeHtml(deviceLabel()) + '</b>).<br>' +
-        'Letzter Abgleich: ' + last + (offen ? '<br>Es gibt noch nicht übertragene Änderungen.' : '');
+        'Letzter Abgleich: ' + last + (offen ? '<br>Es gibt noch nicht übertragene Änderungen.' : '') + fehler;
       loginBox.style.display = 'none';
       actionBox.style.display = 'block';
       const nameInput = document.getElementById('cloud-device-name');
@@ -2136,6 +2201,60 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   });
 
   document.getElementById('cloud-sync-btn').addEventListener('click', ()=> cloudSync(true));
+
+  document.getElementById('cloud-force-push-btn').addEventListener('click', async ()=>{
+    if(!authData) return;
+    if(!confirm(
+      'Den Stand dieses Geräts in die Cloud schreiben?\n\n' +
+      allCards().length + ' Vokabeln, ' + stars.balance + ' Sterne\n\n' +
+      'Der Stand in der Cloud wird ersetzt, unabhängig davon, welcher neuer ist. ' +
+      'Andere Geräte übernehmen ihn beim nächsten Abgleich.'
+    )) return;
+    cloudMsg('Wird hochgeladen …', 'ok');
+    try{
+      syncMeta.stamp = Date.now();
+      await saveSyncMeta();
+      await cloudPush();
+      cloudMsg('Stand hochgeladen (' + stars.balance + ' Sterne).', 'ok');
+    }catch(e){
+      await recordSyncError(e);
+      cloudMsg('Hochladen fehlgeschlagen: ' + fbErrorText(e), 'err');
+    }
+    renderCloudStatus();
+  });
+
+  document.getElementById('cloud-force-pull-btn').addEventListener('click', async ()=>{
+    if(!authData) return;
+    cloudMsg('Wird geladen …', 'ok');
+    let remote;
+    try{
+      remote = await cloudGet();
+    }catch(e){
+      cloudMsg('Laden fehlgeschlagen: ' + fbErrorText(e), 'err');
+      return;
+    }
+    if(!remote || !remote.updatedAt){
+      cloudMsg('In der Cloud liegt noch kein Stand.', 'err');
+      return;
+    }
+    const rDecks = remote.decks || {};
+    const rCards = Object.keys(rDecks).reduce((n,k)=> n + (rDecks[k] ? rDecks[k].length : 0), 0);
+    if(!confirm(
+      'Den Stand aus der Cloud auf dieses Gerät holen?\n\n' +
+      'Cloud (' + (remote.device || 'unbekannt') + ', ' + new Date(remote.updatedAt).toLocaleString('de-DE') + '):\n' +
+      rCards + ' Vokabeln, ' + ((remote.stars && remote.stars.balance) || 0) + ' Sterne\n\n' +
+      'Auf diesem Gerät:\n' + allCards().length + ' Vokabeln, ' + stars.balance + ' Sterne\n\n' +
+      'Der Stand dieses Geräts wird ersetzt, unabhängig davon, welcher neuer ist.'
+    )) return;
+    try{
+      await applyCloudPayload(remote);
+      await clearSyncError();
+      cloudMsg('Stand aus der Cloud übernommen.', 'ok');
+    }catch(e){
+      cloudMsg('Übernehmen fehlgeschlagen: ' + fbErrorText(e), 'err');
+    }
+    renderCloudStatus();
+  });
 
   document.getElementById('cloud-device-name').addEventListener('change', async (e)=>{
     syncMeta.deviceName = e.target.value.trim();
@@ -2301,6 +2420,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     if(d.streak) streakData = d.streak;
     if(d.daily) dailyData = d.daily;
     if(d.pin) pinData = d.pin;
+    normalizeState();
 
     await saveDecks();
     await saveBestScores();
@@ -2321,6 +2441,21 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   });
 
   document.querySelector('nav.tabs button[data-tab="manage"]').addEventListener('click', renderSyncInfo);
+
+  // Eine Home-Bildschirm-App hat keine Adressleiste. Ein normales Neuladen
+  // liefert oft die zwischengespeicherte Datei, deshalb wird die Adresse mit
+  // einem Zeitstempel versehen – so muss der Server neu liefern.
+  document.getElementById('app-reload-btn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('app-reload-btn');
+    btn.disabled = true;
+    btn.textContent = 'Wird geladen …';
+    try{
+      if(authData && (syncMeta.stamp || 0) > (syncMeta.lastSyncedStamp || 0)){
+        await cloudPush();
+      }
+    }catch(e){}
+    location.replace(location.pathname + '?v=' + Date.now());
+  });
 
   // ============ Zuruecksetzen ============
   function resetMsg(text){
