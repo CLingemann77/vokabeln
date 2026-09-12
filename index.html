@@ -1844,12 +1844,26 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     return await res.json();
   }
 
-  async function cloudPut(payload){
+  async function cloudPut(payload, keepalive){
     const token = await fbToken();
-    const res = await fbFetch(statePath() + '?auth=' + encodeURIComponent(token), {
+    const url = statePath() + '?auth=' + encodeURIComponent(token);
+    const body = JSON.stringify(payload);
+    // Beim Schliessen der App friert iOS laufende Anfragen ein. keepalive sorgt
+    // dafuer, dass das System die Anfrage trotzdem zu Ende bringt.
+    if(keepalive){
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+        keepalive: true
+      });
+      if(!res.ok) throw new Error('PUT_FAILED_' + res.status);
+      return true;
+    }
+    const res = await fbFetch(url, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
+      body: body
     });
     if(!res.ok) throw new Error('PUT_FAILED_' + res.status);
     return true;
@@ -1906,9 +1920,9 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     renderSyncInfo();
   }
 
-  async function cloudPush(){
+  async function cloudPush(keepalive){
     if(!authData) return false;
-    await cloudPut(buildCloudPayload());
+    await cloudPut(buildCloudPayload(), keepalive);
     syncMeta.lastSyncedStamp = syncMeta.stamp;
     syncMeta.lastSyncAt = Date.now();
     await saveSyncMeta();
@@ -2001,9 +2015,17 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     }, 2500);
   }
 
-  async function touch(){
+  // sofort = true fuer alles, was Amy unmittelbar sieht (Sterne, Streak,
+  // Tages-Herausforderung). Der verzoegerte Upload reicht dafuer nicht: wird die
+  // App direkt nach der letzten Antwort geschlossen, geht er verloren.
+  async function touch(sofort){
     syncMeta.stamp = Date.now();
     await saveSyncMeta();
+    if(sofort){
+      if(pushTimer){ clearTimeout(pushTimer); pushTimer = null; }
+      cloudPush().catch(()=> schedulePush());
+      return;
+    }
     schedulePush();
   }
 
@@ -2017,12 +2039,12 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
   const origSaveStreak = saveStreak;
   const origSaveDaily = saveDaily;
 
-  saveDecks = async function(){ await origSaveDecks(); await touch(); };
-  saveBestScores = async function(){ await origSaveBestScores(); await touch(); };
-  saveSettings = async function(){ await origSaveSettings(); await touch(); };
-  saveStars = async function(){ await origSaveStars(); await touch(); };
-  saveStreak = async function(){ await origSaveStreak(); await touch(); };
-  saveDaily = async function(){ await origSaveDaily(); await touch(); };
+  saveDecks = async function(){ await origSaveDecks(); await touch(false); };
+  saveBestScores = async function(){ await origSaveBestScores(); await touch(false); };
+  saveSettings = async function(){ await origSaveSettings(); await touch(false); };
+  saveStars = async function(){ await origSaveStars(); await touch(true); };
+  saveStreak = async function(){ await origSaveStreak(); await touch(true); };
+  saveDaily = async function(){ await origSaveDaily(); await touch(true); };
 
   function renderCloudStatus(){
     const el = document.getElementById('cloud-status');
@@ -2107,15 +2129,21 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
 
   // Bei Rueckkehr auf die Seite pruefen, ob ein anderes Geraet neuer ist,
   // und offene Aenderungen vor dem Verlassen wegschreiben.
+  function pushPending(){
+    if(!authData) return;
+    if(pushTimer){ clearTimeout(pushTimer); pushTimer = null; }
+    if((syncMeta.stamp || 0) > (syncMeta.lastSyncedStamp || 0)) cloudPush(true).catch(()=>{});
+  }
+
   document.addEventListener('visibilitychange', ()=>{
     if(!authData) return;
-    if(document.visibilityState === 'visible'){
-      cloudSync(false);
-    } else {
-      if(pushTimer){ clearTimeout(pushTimer); pushTimer = null; }
-      if((syncMeta.stamp || 0) > (syncMeta.lastSyncedStamp || 0)) cloudPush().catch(()=>{});
-    }
+    if(document.visibilityState === 'visible') cloudSync(false);
+    else pushPending();
   });
+
+  // pagehide feuert auf iOS auch dann, wenn die App aus dem Multitasking
+  // geschlossen wird – visibilitychange allein ist dort nicht verlaesslich.
+  window.addEventListener('pagehide', pushPending);
 
   // ============ Sicherungsdatei ============
   const BACKUP_FORMAT = 'vokabeltrainer-sync';
