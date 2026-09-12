@@ -1094,7 +1094,9 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       document.getElementById('learn-area').innerHTML =
         `<div class="done-banner"><div class="emoji">🐴🎉</div><h3>Nichts fällig</h3>` +
         `<div style="color:var(--ink-soft);font-size:0.88rem;">Für heute ist alles wiederholt. ` +
-        `Unter „Üben“ kannst du trotzdem weitermachen.</div></div>`;
+        `Unter „Üben“ kannst du trotzdem weitermachen.</div></div>` +
+        `<button class="primary-btn" id="review-empty-practice" style="margin-top:14px;">Zum Üben</button>`;
+      document.getElementById('review-empty-practice').addEventListener('click', ()=>{ switchTab('practice'); document.getElementById('practice-back-to-decks').click(); });
       return;
     }
     queue = shuffle(due);
@@ -1108,7 +1110,11 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     const fill = document.getElementById('progress-fill');
     if(currentIdx >= queue.length){
       fill.style.width = '100%';
-      area.innerHTML = `<div class="done-banner"><div class="emoji">🐴🎉</div><h3>Fertig für heute!</h3><div style="color:var(--ink-soft);font-size:0.88rem;">${sessionTotal} Vokabel${sessionTotal===1?'':'n'} wiederholt.</div></div>`;
+      area.innerHTML = `<div class="done-banner"><div class="emoji">🐴🎉</div><h3>Fertig für heute!</h3><div style="color:var(--ink-soft);font-size:0.88rem;">${sessionTotal} Vokabel${sessionTotal===1?'':'n'} wiederholt.</div></div>` +
+        `<button class="primary-btn" id="review-to-start" style="margin-top:14px;">Zur Startseite</button>` +
+        `<button class="secondary-btn" id="review-to-practice">Weiter üben</button>`;
+      document.getElementById('review-to-start').addEventListener('click', ()=> switchTab('overview'));
+      document.getElementById('review-to-practice').addEventListener('click', ()=>{ switchTab('practice'); document.getElementById('practice-back-to-decks').click(); });
       return;
     }
     const pct = sessionTotal ? Math.round((currentIdx/sessionTotal)*100) : 0;
@@ -1352,8 +1358,10 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
         <div class="score-label">richtige Antworten in 60 Sekunden</div>
       </div>
       <button class="primary-btn coral" id="blitz-again">Nochmal</button>
+      <button class="secondary-btn" id="blitz-to-home">Zur Übungsauswahl</button>
     `;
     document.getElementById('blitz-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('blitz-to-home').addEventListener('click', showPracticeHome);
     document.getElementById('blitz-again').addEventListener('click', startBlitzMode);
   }
 
@@ -1366,6 +1374,36 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     showPracticePlay();
     renderBrowseCard();
   }
+  // Karteikarten sind freies Durchblaettern ohne Abfrage. Damit sich Sterne
+  // nicht beliebig oft abgreifen lassen, gibt es sie einmal pro Unit und Tag,
+  // wenn die Unit einmal komplett durchgeblaettert wurde.
+  async function finishBrowseMode(){
+    const key = practiceDeckName + '|' + todayStr();
+    if(!dailyData.browseDone) dailyData.browseDone = {};
+    const schonHeute = !!dailyData.browseDone[key];
+    if(!schonHeute){
+      dailyData.browseDone[key] = true;
+      await saveDaily();
+      await awardStars(2, 'Karteikarten: ' + practiceDeckName + ' durchgearbeitet');
+      await markPracticedToday();
+    }
+    const play = document.getElementById('practice-play');
+    play.innerHTML = `
+      <button class="back-link" id="browse-back-2">← Zurück</button>
+      <div class="game-done">
+        <div class="emoji">🐴👏</div>
+        <div class="score">${browseCards.length}</div>
+        <div class="score-label">Karten angeschaut</div>
+        <div class="best-badge">${schonHeute ? 'Sterne gab es dafür heute schon' : '⭐ 2 Sterne'}</div>
+      </div>
+      <button class="primary-btn coral" id="browse-again">Nochmal durchgehen</button>
+      <button class="secondary-btn" id="browse-to-home">Zur Übungsauswahl</button>
+    `;
+    document.getElementById('browse-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('browse-to-home').addEventListener('click', showPracticeHome);
+    document.getElementById('browse-again').addEventListener('click', startBrowseMode);
+  }
+
   function renderBrowseCard(){
     const play = document.getElementById('practice-play');
     const card = browseCards[browseIdx];
@@ -1384,7 +1422,7 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       </div>
       <div class="nav-row">
         <button class="nav-btn" id="browse-prev" ${browseIdx===0?'disabled':''}>← Vorherige</button>
-        <button class="nav-btn" id="browse-next" ${browseIdx===browseCards.length-1?'disabled':''}>Nächste →</button>
+        <button class="nav-btn" id="browse-next">${browseIdx===browseCards.length-1?'Fertig ✓':'Nächste →'}</button>
       </div>
     `;
     document.getElementById('browse-back').addEventListener('click', showPracticeHome);
@@ -1400,7 +1438,10 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
     });
     document.getElementById('browse-speak-btn').addEventListener('click', (e)=>{ e.stopPropagation(); speak(card.en); });
     document.getElementById('browse-prev').addEventListener('click', ()=>{ if(browseIdx>0){ browseIdx--; renderBrowseCard(); } });
-    document.getElementById('browse-next').addEventListener('click', ()=>{ if(browseIdx<browseCards.length-1){ browseIdx++; renderBrowseCard(); } });
+    document.getElementById('browse-next').addEventListener('click', ()=>{
+      if(browseIdx < browseCards.length-1){ browseIdx++; renderBrowseCard(); }
+      else finishBrowseMode();
+    });
   }
 
   // ---- Lernen (Multiple Choice mit Feedback, Fehler wiederholen) ----
@@ -1488,8 +1529,10 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
         ${isNewBest ? '<div class="best-badge">🏆 Neue Bestleistung!</div>' : `<div class="best-badge">Beste Leistung: ${prevBest}%</div>`}
       </div>
       <button class="primary-btn coral" id="learn-again">Nochmal üben</button>
+      <button class="secondary-btn" id="learn-to-home">Zur Übungsauswahl</button>
     `;
     document.getElementById('learn-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('learn-to-home').addEventListener('click', showPracticeHome);
     document.getElementById('learn-again').addEventListener('click', startLearnMode);
   }
 
@@ -1567,8 +1610,10 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
       </div>
       <div class="review-list">${reviewHtml}</div>
       <button class="primary-btn coral" id="test-again">Nochmal testen</button>
+      <button class="secondary-btn" id="test-to-home">Zur Übungsauswahl</button>
     `;
     document.getElementById('test-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('test-to-home').addEventListener('click', showPracticeHome);
     document.getElementById('test-again').addEventListener('click', startTestMode);
   }
 
@@ -1656,8 +1701,10 @@ student;der Schüler / die Schülerin; der Student / die Studentin`)
         ${isNewBest ? '<div class="best-badge">🏆 Neue Bestzeit!</div>' : `<div class="best-badge">Bestzeit: ${prevBest}s</div>`}
       </div>
       <button class="primary-btn coral" id="match-again">Nochmal spielen</button>
+      <button class="secondary-btn" id="match-to-home">Zur Übungsauswahl</button>
     `;
     document.getElementById('match-back-2').addEventListener('click', showPracticeHome);
+    document.getElementById('match-to-home').addEventListener('click', showPracticeHome);
     document.getElementById('match-again').addEventListener('click', startMatchGame);
   }
 
